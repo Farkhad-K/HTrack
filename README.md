@@ -8,3 +8,8 @@
 
 - **Data Tracking:** Provides a comprehensive data tracking system, allowing users to store and retrieve data efficiently.
 - **API Endpoints:** Exposes a set of RESTful API endpoints for interacting with the data tracking system.
+
+## Getting Started
+
+- ** .NET Core 8.0 or later
+- ** Docker (optional)
