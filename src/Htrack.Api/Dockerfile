@@ -16,6 +16,9 @@ RUN dotnet publish -c Release -o out
 FROM mcr.microsoft.com/dotnet/aspnet:8.0
 WORKDIR /app
 
+# 🔧 Ensure Reports directory exists
+RUN mkdir -p /app/Reports
+
 # Copy published output
 COPY --from=build /app/out .
 
@@ -24,3 +27,4 @@ ENV ASPNETCORE_ENVIRONMENT=Production
 
 # Run the application
 ENTRYPOINT ["dotnet", "Htrack.Api.dll"]
+
