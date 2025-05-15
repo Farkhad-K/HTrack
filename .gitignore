@@ -6,6 +6,7 @@
 **/appsettings.Development.json
 **/appsettings.Production.json
 .vscode
+*.xlsx
 
 # dotenv files
 .env
