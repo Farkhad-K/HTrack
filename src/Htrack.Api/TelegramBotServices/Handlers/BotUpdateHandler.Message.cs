@@ -194,7 +194,7 @@ public partial class BotUpdateHandler
                 // break;
 
                 // change to /excelReportLastMonth
-                case "/excelReport":
+                case "/excel_report":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
@@ -232,7 +232,7 @@ public partial class BotUpdateHandler
 
                     break;
 
-                case "/15daysReport":
+                case "/15daysreport":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(chatId: message.Chat.Id,
@@ -265,7 +265,7 @@ public partial class BotUpdateHandler
                         cancellationToken: ct);
                     break;
 
-                case "/newAttendance":
+                case "/new_attendance":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
@@ -283,7 +283,7 @@ public partial class BotUpdateHandler
                         cancellationToken: ct);
                     break;
 
-                case "/updateEmployee":
+                case "/update_employee":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
@@ -302,7 +302,7 @@ public partial class BotUpdateHandler
                         cancellationToken: ct);
                     break;
 
-                case "/checkedIn":
+                case "/checked_in":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
@@ -334,7 +334,7 @@ public partial class BotUpdateHandler
                     }
                     break;
 
-                case "/checkedOut":
+                case "/checked_out":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
