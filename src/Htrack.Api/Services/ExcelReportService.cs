@@ -184,12 +184,16 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
         var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
         if (company == null) return null;
 
+        // Instead of returning cached report, regenerate it
+        await Generate15DayAttendanceReportsAsync();
+
+        // Use pattern again to fetch the latest
         var now = DateTime.UtcNow;
         var periodName = now.Day <= 15 ? "1dan15" : "16dan31";
         var reportDir = Path.Combine(env.ContentRootPath, "Reports");
-
         var pattern = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}_*.xlsx";
         var files = Directory.GetFiles(reportDir, pattern);
+
         if (!files.Any()) return null;
 
         var latestFile = files.OrderByDescending(File.GetCreationTime).First();

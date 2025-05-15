@@ -13,20 +13,6 @@ using Hangfire.PostgreSql;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// builder.WebHost.ConfigureKestrel(serverOptions =>
-// {
-//     serverOptions.ListenAnyIP(5069); // Allows external devices to access it
-// });
-
-/* Adding files to .gitignore after commit
-git ls-files | findstr "appsettings.Production.json"
-src/EduConnect.Api/appsettings.Production.json
-so how to remove this file
-
-git rm --cached src/EduConnect.Api/appsettings.Production.json
-git commit -m "Stop tracking appsettings.Production.json"
-*/
-
 builder.Services.AddDbContext<IHTrackDbContext, HTrackDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("HTrack")));
 builder.Services.AddHostedService<MigrationsHostedService>();
@@ -52,6 +38,7 @@ builder.Services.AddScoped<IAttendancesService, AttendancesService>();
 builder.Services.AddScoped<IExcelReportService, ExcelReportService>();
 
 builder.Services.AddScoped<ExcelExportService>(); // Test
+builder.Services.AddScoped<ReportCleanupService>();
 
 builder.Services.AddScoped<IAttendanceNotifier, TelegramAttendanceNotifier>();
 
@@ -82,4 +69,7 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.UseHangfireDashboard();
+
+RecurringJob.AddOrUpdate<ReportCleanupService>("delete-old-reports", x => x.CleanupOldReports(), Cron.Daily);
+
 app.Run();
