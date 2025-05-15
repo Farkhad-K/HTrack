@@ -37,14 +37,14 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
                 .ThenBy(a => a.CheckIn)
                 .ToList();
 
-            var fileName = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}.xlsx";
+            var timestamp = now.ToString("yyyyMMdd_HHmmss");
+            var fileName = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}_{timestamp}.xlsx";
             var filePath = Path.Combine(env.ContentRootPath, "Reports", fileName);
             Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
             using var workbook = new XLWorkbook();
             var worksheet = workbook.Worksheets.Add("Davomat");
 
-            // Sarlavhalar
             worksheet.Cell(1, 1).Value = "Ishchi";
             worksheet.Cell(1, 2).Value = "Kelgan vaqti";
             worksheet.Cell(1, 3).Value = "Ketgan vaqti";
@@ -78,7 +78,6 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
                     row++;
                 }
 
-                // Jami
                 worksheet.Cell(row, 3).Value = "Jami";
                 worksheet.Cell(row, 4).Value = $"{(int)totalDuration.TotalHours:D2}:{totalDuration.Minutes:D2}";
                 worksheet.Row(row).Style.Font.Bold = true;
@@ -121,7 +120,9 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
                 .ThenBy(a => a.CheckIn)
                 .ToList();
 
-            var filePath = Path.Combine(env.ContentRootPath, "Reports", $"{company.Name}_{monthName}_{year}_davomat.xlsx");
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+            var fileName = $"{company.Name}_{monthName}_{year}_davomat_{timestamp}.xlsx";
+            var filePath = Path.Combine(env.ContentRootPath, "Reports", fileName);
             Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
 
             using var workbook = new XLWorkbook();
@@ -185,15 +186,17 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
 
         var now = DateTime.UtcNow;
         var periodName = now.Day <= 15 ? "1dan15" : "16dan31";
-        var fileName = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}.xlsx";
-        var filePath = Path.Combine(env.ContentRootPath, "Reports", fileName);
+        var reportDir = Path.Combine(env.ContentRootPath, "Reports");
 
-        if (!File.Exists(filePath)) return null;
+        var pattern = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}_*.xlsx";
+        var files = Directory.GetFiles(reportDir, pattern);
+        if (!files.Any()) return null;
 
-        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        var latestFile = files.OrderByDescending(File.GetCreationTime).First();
+        var stream = new FileStream(latestFile, FileMode.Open, FileAccess.Read);
         return new FileStreamResult(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         {
-            FileDownloadName = Path.GetFileName(filePath)
+            FileDownloadName = Path.GetFileName(latestFile)
         };
     }
 
@@ -203,15 +206,17 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
         if (company == null) return null;
 
         var lastMonth = DateTime.UtcNow.AddMonths(-1);
-        var fileName = $"{company.Name}_{lastMonth.ToString("MMMM", _uzCulture)}_{lastMonth.Year}_davomat.xlsx";
-        var filePath = Path.Combine(env.ContentRootPath, "Reports", fileName);
+        var reportDir = Path.Combine(env.ContentRootPath, "Reports");
 
-        if (!File.Exists(filePath)) return null;
+        var pattern = $"{company.Name}_{lastMonth.ToString("MMMM", _uzCulture)}_{lastMonth.Year}_davomat_*.xlsx";
+        var files = Directory.GetFiles(reportDir, pattern);
+        if (!files.Any()) return null;
 
-        var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read);
+        var latestFile = files.OrderByDescending(File.GetCreationTime).First();
+        var stream = new FileStream(latestFile, FileMode.Open, FileAccess.Read);
         return new FileStreamResult(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
         {
-            FileDownloadName = Path.GetFileName(filePath)
+            FileDownloadName = Path.GetFileName(latestFile)
         };
     }
 }
