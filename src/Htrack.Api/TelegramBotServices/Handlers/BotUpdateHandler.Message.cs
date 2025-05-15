@@ -44,13 +44,26 @@ public partial class BotUpdateHandler
 
             var userId = from.Id;
 
+            var greeting_HelpMsg =
+                "✨ HTrack Botiga xush kelibsiz! ✨\n\n" +
+                "Quyidagi buyruqlardan foydalanishingiz mumkin:\n\n" +
+                "🔹 */start* - Xush kelibsiz xabari va kompaniya ruxsati\n" +
+                "🔹 */employees* - Barcha xodimlar va ularning RFID kodlari ro‘yxati\n" +
+                "🔹 */excel_report* - O‘tgan oy uchun Excel hisobotini yuklab olish\n" +
+                "🔹 */15daysreport* - So‘nggi 15 kunlik tashriflar hisobotini yuklab olish\n" +
+                "🔹 */new_attendance* - RFID orqali xodimni qo‘lda ro‘yxatdan o‘tkazish\n" +
+                "🔹 */update_employee* - Xodim ismini RFID orqali yangilash\n" +
+                "🔹 */checked_in* - Hozir ishda bo‘lgan xodimlar ro‘yxati\n" +
+                "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro‘yxati\n\n" +
+                "ℹ️ Yuqoridagi buyruqlar yordamida kompaniyangizning tashrif tizimi bilan samarali ishlang.";
+
             if (pendingCommands.TryGetValue(userId, out var pendingCmd) && pendingCmd == "updateEmployee")
             {
                 if (userCompany is null)
                 {
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: "❌ You're not authorized for any company.",
+                        text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                         cancellationToken: ct);
                     pendingCommands.Remove(userId, out _);
                     return;
@@ -61,7 +74,7 @@ public partial class BotUpdateHandler
                 {
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: "⚠️ Please send the data in the format: `RFID_UID, Full Name`\nExample: `00 00 00 00, Eshmat Toshmatov`",
+                        text: "⚠️ Maʼlumotni quyidagi formatda yuboring: `RFID_UID, To‘liq ism`\nMisol: `00 00 00 00, Eshmat Toshmatov`",
                         parseMode: ParseMode.Markdown,
                         cancellationToken: ct);
                     return;
@@ -79,7 +92,7 @@ public partial class BotUpdateHandler
 
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: $"✅ Updated employee:\nRFID: `{updated.RFIDCardUID}`\nName: *{updated.Name}*",
+                        text: $"✅ Yangilangan xodim:\nRFID: `{updated.RFIDCardUID}`\nIsm: *{updated.Name}*",
                         parseMode: ParseMode.Markdown,
                         cancellationToken: ct);
                 }
@@ -87,7 +100,7 @@ public partial class BotUpdateHandler
                 {
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: $"⚠️ Error: {ex.Message}",
+                        text: $"⚠️ Xatolik: {ex.Message}",
                         cancellationToken: ct);
                 }
 
@@ -100,7 +113,7 @@ public partial class BotUpdateHandler
                 {
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: "❌ You're not authorized for any company.",
+                        text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                         cancellationToken: ct);
                     pendingCommands.Remove(userId, out _);
                     return;
@@ -115,7 +128,7 @@ public partial class BotUpdateHandler
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: $"❌ No employee found with RFID: `{rfidUid}`.",
+                            text: $"❌ Ushbu RFID bo‘yicha xodim topilmadi: `{rfidUid}`.",
                             parseMode: ParseMode.Markdown,
                             cancellationToken: ct);
                         pendingCommands.Remove(userId, out _);
@@ -129,7 +142,7 @@ public partial class BotUpdateHandler
                         await attendancesRepository.CheckInAsync(employee.Id, ct);
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: $"✅ Checked *in* {employee.Name} (RFID: `{employee.RFIDCardUID}`)",
+                            text: $"✅ *{employee.Name}* ishga keldi (RFID: `{employee.RFIDCardUID}`)",
                             parseMode: ParseMode.Markdown,
                             cancellationToken: ct);
                     }
@@ -138,7 +151,7 @@ public partial class BotUpdateHandler
                         await attendancesRepository.CheckOutAsync(lastAttendance, ct);
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: $"✅ Checked *out* {employee.Name} (RFID: `{employee.RFIDCardUID}`)",
+                            text: $"✅ *{employee.Name}* ishni tugatdi (RFID: `{employee.RFIDCardUID}`)",
                             parseMode: ParseMode.Markdown,
                             cancellationToken: ct);
                     }
@@ -147,7 +160,7 @@ public partial class BotUpdateHandler
                 {
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: $"⚠️ Error: {ex.Message}",
+                        text: $"⚠️ Xatolik: {ex.Message}",
                         cancellationToken: ct);
                 }
 
@@ -161,8 +174,8 @@ public partial class BotUpdateHandler
             {
                 case "/start":
                     var welcomeText = userCompany is not null
-                        ? $"👋 Welcome, {from.FirstName}! You're authorized for *{userCompany.Name}*."
-                        : $"👋 Welcome, {from.FirstName}! You're not authorized for any company.";
+                        ? $"👋 Assalomu alaykum, {from.FirstName}! Siz *{userCompany.Name}* kompaniyasiga ruxsatga egasiz.\n\n{greeting_HelpMsg}"
+                        : $"👋 Assalomu alaykum, {from.FirstName}! Siz hech qanday kompaniyaga ruxsatga ega emassiz.";
 
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
@@ -176,14 +189,14 @@ public partial class BotUpdateHandler
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
 
                     var employees = await employeesRepository.GetAllAsync(userCompany.Id, ct);
                     var lines = employees.Select(e => $"• {e.Name} (RFID: `{e.RFIDCardUID}`)");
-                    var messageText = "👥 Employees:\n" + string.Join("\n", lines);
+                    var messageText = "👥 Xodimlar ro‘yxati:\n" + string.Join("\n", lines);
 
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
@@ -194,12 +207,12 @@ public partial class BotUpdateHandler
                 // break;
 
                 // change to /excelReportLastMonth
-                case "/excelReport":
+                case "/excel_report":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
@@ -215,7 +228,7 @@ public partial class BotUpdateHandler
                         {
                             await botClient.SendMessage(
                                 chatId: message.Chat.Id,
-                                text: "⚠️ No data available to generate last month’s report.",
+                                text: "⚠️ O‘tgan oy uchun hisobot mavjud emas.",
                                 cancellationToken: ct);
                             return;
                         }
@@ -227,16 +240,16 @@ public partial class BotUpdateHandler
                     await botClient.SendDocument(
                         chatId: message.Chat.Id,
                         document: new InputFileStream(fileStream, fileName),
-                        caption: $"📊 Attendance Report for {userCompany.Name}",
+                        caption: $"📊 {userCompany.Name} kompaniyasining o'tgan oy uchun, tashrif hisobot fayli",
                         cancellationToken: ct);
 
                     break;
 
-                case "/15daysReport":
+                case "/15daysreport":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
@@ -252,7 +265,7 @@ public partial class BotUpdateHandler
                         {
                             await botClient.SendMessage(
                                 chatId: message.Chat.Id,
-                                text: "⚠️ No data available to generate the 15-day report.",
+                                text: "⚠️ So‘nggi 15 kunlik hisobotni yaratish uchun ma’lumot topilmadi.",
                                 cancellationToken: ct);
                             return;
                         }
@@ -261,16 +274,16 @@ public partial class BotUpdateHandler
                     await botClient.SendDocument(
                         chatId: message.Chat.Id,
                         document: new InputFileStream(report15.FileStream, report15.FileDownloadName),
-                        caption: $"📆 15-Day Attendance Report for {userCompany.Name}",
+                        caption: $"📆 {userCompany.Name} kompaniyasi uchun 15 kunlik tashrif hisobot fayli",
                         cancellationToken: ct);
                     break;
 
-                case "/newAttendance":
+                case "/new_attendance":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
@@ -279,16 +292,16 @@ public partial class BotUpdateHandler
 
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: "📮 Please send the RFID UID of the employee.",
+                        text: "📮 Iltimos, xodimning RFID UID kodini yuboring.",
                         cancellationToken: ct);
                     break;
 
-                case "/updateEmployee":
+                case "/update_employee":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
@@ -297,17 +310,17 @@ public partial class BotUpdateHandler
 
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: "✏️ Please send the employee's *RFID UID and full name*, separated by a comma.\n\nExample:\n`00 00 00 00, Eshmat Toshmatov`",
+                        text: "✏️ Iltimos, xodimning *RFID UID va to‘liq ismini* vergul bilan ajratib yuboring.\n\nMisol:\n`00 00 00 00, Eshmat Toshmatov`",
                         parseMode: ParseMode.Markdown,
                         cancellationToken: ct);
                     break;
 
-                case "/checkedIn":
+                case "/checked_in":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
@@ -317,14 +330,14 @@ public partial class BotUpdateHandler
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "ℹ️ No employees are currently checked in.",
+                            text: "ℹ️ Hozirda hech bir xodim ishda emas.",
                             cancellationToken: ct);
                     }
                     else
                     {
                         var inLines = checkedInEmployees
                             .Select(a => $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {a.CheckIn:HH:mm:ss}");
-                        var checkedInText = "✅ *Currently Checked-In Employees:*\n" + string.Join("\n", inLines);
+                        var checkedInText = "✅ *Hozirda ishda bo‘lgan xodimlar:*\n" + string.Join("\n", inLines);
 
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
@@ -334,12 +347,12 @@ public partial class BotUpdateHandler
                     }
                     break;
 
-                case "/checkedOut":
+                case "/checked_out":
                     if (userCompany is null)
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "❌ You're not authorized for any company.",
+                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
                             cancellationToken: ct);
                         return;
                     }
@@ -349,14 +362,14 @@ public partial class BotUpdateHandler
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "ℹ️ No employees have checked out today.",
+                            text: "ℹ️ Hozircha hech bir xodim ishni yakunlamagan.",
                             cancellationToken: ct);
                     }
                     else
                     {
                         var outLines = checkedOutEmployees
                             .Select(a => $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {a.CheckOut:HH:mm:ss}");
-                        var checkedOutText = "🏁 *Checked-Out Employees:*\n" + string.Join("\n", outLines);
+                        var checkedOutText = "🏁 *Bugun ishni tugatgan xodimlar:*\n" + string.Join("\n", outLines);
 
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
@@ -369,7 +382,7 @@ public partial class BotUpdateHandler
                 default:
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
-                        text: "Unknown command: " + message.Text,
+                        text: "Nomaʼlum buyruq: " + message.Text,
                         cancellationToken: ct);
                     break;
             }
@@ -384,7 +397,7 @@ public partial class BotUpdateHandler
 
         await botClient.SendMessage(
             chatId: message.Chat.Id,
-            text: "Unknown message type (type of the message): " + message.Type,
+            text: "Nomaʼlum xabar turi: " + message.Type,
             cancellationToken: cancellationToken);
     }
 }
