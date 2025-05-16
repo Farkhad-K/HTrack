@@ -13,7 +13,8 @@ public class AttendancesRepository(
 {
     public async ValueTask<Employee?> GetEmployeeByRfidAsync(Guid companyId, string rfidCardUID, CancellationToken cancellationToken = default)
         => await context.Employees.Include(e => e.Company)
-            .FirstOrDefaultAsync(e => e.CompanyId == companyId && e.RFIDCardUID == rfidCardUID, cancellationToken)
+            .FirstOrDefaultAsync(e => e.CompanyId == companyId &&
+        EF.Functions.Like(e.RFIDCardUID!.Replace(" ", ""), rfidCardUID.Replace(" ", "")), cancellationToken)
             ?? throw new EmployeeWithUIDNotFoundException(rfidCardUID);
 
     public async ValueTask<Attendance?> GetLastAttendanceAsync(Guid employeeId, CancellationToken cancellationToken = default)
