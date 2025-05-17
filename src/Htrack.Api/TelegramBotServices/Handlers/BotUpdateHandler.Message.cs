@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using HTrack.Api.Abstractions.RepositoriesAbstractions;
 using HTrack.Api.Entities;
+using HTrack.Api.Utilities;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
@@ -336,7 +337,12 @@ public partial class BotUpdateHandler
                     else
                     {
                         var inLines = checkedInEmployees
-                            .Select(a => $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {a.CheckIn:HH:mm:ss}");
+                            .Select(a =>
+                            {
+                                var uzTime = TimeHelper.ToUzbekistanTime(a!.CheckIn);
+                                return $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {uzTime:HH:mm:ss}";
+                            });
+
                         var checkedInText = "✅ *Hozirda ishda bo‘lgan xodimlar:*\n" + string.Join("\n", inLines);
 
                         await botClient.SendMessage(
@@ -368,7 +374,11 @@ public partial class BotUpdateHandler
                     else
                     {
                         var outLines = checkedOutEmployees
-                            .Select(a => $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {a.CheckOut:HH:mm:ss}");
+                            .Select(a =>
+                            {
+                                var uzTime = TimeHelper.ToUzbekistanTime(a!.CheckOut!.Value);
+                                return $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {uzTime:HH:mm:ss}";
+                            });
                         var checkedOutText = "🏁 *Bugun ishni tugatgan xodimlar:*\n" + string.Join("\n", outLines);
 
                         await botClient.SendMessage(
