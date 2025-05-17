@@ -70,6 +70,15 @@ app.MapControllers();
 
 app.UseHangfireDashboard();
 
-RecurringJob.AddOrUpdate<ReportCleanupService>("delete-old-reports", x => x.CleanupOldReports(), Cron.Daily);
+RecurringJob.AddOrUpdate<ReportCleanupService>(
+    "delete-old-reports",
+    x => x.CleanupOldReports(),
+    Cron.Hourly);
+
+// RecurringJob.AddOrUpdate<ReportCleanupService>(
+//     "delete-old-reports",
+//     x => x.CleanupOldReports(),
+//     "*/5 * * * *"    // every 5 minutes
+// );
 
 app.Run();
