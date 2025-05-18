@@ -1,0 +1,41 @@
+name: Deploy HTrack API/Telegram Bot
+
+on:
+  push:
+    branches:
+      - main
+      
+jobs:
+  build: 
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v2
+    - name: Set up .NET 8
+      uses: actions/setup-dotnet@v1
+      with:
+        dotnet-version: '8.x'
+    - name: Restore dependencies
+      run: dotnet restore
+    - name: Build
+      run: dotnet build --configuration Release
+
+  deploy:
+    name: Deploy to Timeweb Cloud
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy .NET app to Timeweb Cloud
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          username: ${{ secrets.SSH_USER }}
+          script: |
+            cd  HTrack
+            git checkout main
+            git pull origin main
+            cd htc_infra
+            docker-compose down
+            docker-compose up --build -d
+      
