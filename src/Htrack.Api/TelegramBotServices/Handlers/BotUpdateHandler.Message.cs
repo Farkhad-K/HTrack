@@ -27,6 +27,24 @@ public partial class BotUpdateHandler
         await handler;
     }
 
+    private static async Task<bool> EnsureCompanyAccess(
+    ITelegramBotClient botClient,
+    Message message,
+    Company? userCompany,
+    CancellationToken ct)
+    {
+        if (userCompany is null)
+        {
+            await botClient.SendMessage(
+                chatId: message.Chat.Id,
+                text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
+                cancellationToken: ct);
+            return false;
+        }
+
+        return true;
+    }
+
     private async Task HandleTextMessageAsync(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
         var from = message.From;
@@ -44,19 +62,6 @@ public partial class BotUpdateHandler
             var userCompany = companies.FirstOrDefault(c => c.ManagerTgUserIDs.Contains(from.Id));
 
             var userId = from.Id;
-
-            var greeting_HelpMsg =
-                "✨ HTrack Botiga xush kelibsiz! ✨\n\n" +
-                "Quyidagi buyruqlardan foydalanishingiz mumkin:\n\n" +
-                "🔹 */start* - Xush kelibsiz xabari va kompaniya ruxsati\n" +
-                "🔹 */employees* - Barcha xodimlar va ularning RFID kodlari ro‘yxati\n" +
-                "🔹 */excel_report* - O‘tgan oy uchun Excel hisobotini yuklab olish\n" +
-                "🔹 */15daysreport* - So‘nggi 15 kunlik tashriflar hisobotini yuklab olish\n" +
-                "🔹 */new_attendance* - RFID orqali xodimni qo‘lda ro‘yxatdan o‘tkazish\n" +
-                "🔹 */update_employee* - Xodim ismini RFID orqali yangilash\n" +
-                "🔹 */checked_in* - Hozir ishda bo‘lgan xodimlar ro‘yxati\n" +
-                "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro‘yxati\n\n" +
-                "ℹ️ Yuqoridagi buyruqlar yordamida kompaniyangizning tashrif tizimi bilan samarali ishlang.";
 
             if (pendingCommands.TryGetValue(userId, out var pendingCmd) && pendingCmd == "updateEmployee")
             {
@@ -81,7 +86,7 @@ public partial class BotUpdateHandler
                     return;
                 }
 
-                var rfidUid = inputParts[0].Trim();
+                var rfidUid = inputParts[0].Trim().Replace(" ", "").ToUpperInvariant();
                 var fullName = inputParts[1].Trim();
 
                 try
@@ -122,7 +127,7 @@ public partial class BotUpdateHandler
 
                 try
                 {
-                    var rfidUid = message.Text.Trim();
+                    var rfidUid = message.Text.Trim().Replace(" ", "").ToUpperInvariant();
                     var employee = await attendancesRepository.GetEmployeeByRfidAsync(userCompany.Id, rfidUid, ct);
 
                     if (employee == null)
@@ -174,220 +179,47 @@ public partial class BotUpdateHandler
             switch (message.Text.Trim())
             {
                 case "/start":
-                    var welcomeText = userCompany is not null
-                        ? $"👋 Assalomu alaykum, {from.FirstName}! Siz *{userCompany.Name}* kompaniyasiga ruxsatga egasiz.\n\n{greeting_HelpMsg}"
-                        : $"👋 Assalomu alaykum, {from.FirstName}! Siz hech qanday kompaniyaga ruxsatga ega emassiz.";
-
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: welcomeText,
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
+                    await HandleStartCommand(botClient, message, userCompany, ct);
                     break;
 
                 case "/employees":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    var employees = await employeesRepository.GetAllAsync(userCompany.Id, ct);
-                    var lines = employees.Select(e => $"• {e.Name} (RFID: `{e.RFIDCardUID}`)");
-                    var messageText = "👥 Xodimlar ro‘yxati:\n" + string.Join("\n", lines);
-
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: messageText,
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
-                    return;
-                // break;
+                    await HandleEmployeesCommand(botClient, message, userCompany, employeesRepository, ct);
+                    // return;
+                    break;
 
                 // change to /excelReportLastMonth
                 case "/excel_report":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    var reportResult = await reportService.GetLastMonthReportAsync(userCompany.Id);
-
-                    if (reportResult is null)
-                    {
-                        await reportService.GenerateMonthlyAttendanceReportsAsync(ct);
-                        reportResult = await reportService.GetLastMonthReportAsync(userCompany.Id);
-
-                        if (reportResult is null)
-                        {
-                            await botClient.SendMessage(
-                                chatId: message.Chat.Id,
-                                text: "⚠️ O‘tgan oy uchun hisobot mavjud emas.",
-                                cancellationToken: ct);
-                            return;
-                        }
-                    }
-
-                    var fileStream = reportResult.FileStream;
-                    var fileName = reportResult.FileDownloadName;
-
-                    await botClient.SendDocument(
-                        chatId: message.Chat.Id,
-                        document: new InputFileStream(fileStream, fileName),
-                        caption: $"📊 {userCompany.Name} kompaniyasining o'tgan oy uchun, tashrif hisobot fayli",
-                        cancellationToken: ct);
-
+                    await HandleExcelReportCommand(botClient, message, userCompany, reportService, ct);
                     break;
 
                 case "/15daysreport":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    var report15 = await reportService.Get15DayReportAsync(userCompany.Id);
-
-                    if (report15 is null)
-                    {
-                        await reportService.Generate15DayAttendanceReportsAsync(ct);
-                        report15 = await reportService.Get15DayReportAsync(userCompany.Id);
-
-                        if (report15 is null)
-                        {
-                            await botClient.SendMessage(
-                                chatId: message.Chat.Id,
-                                text: "⚠️ So‘nggi 15 kunlik hisobotni yaratish uchun ma’lumot topilmadi.",
-                                cancellationToken: ct);
-                            return;
-                        }
-                    }
-
-                    await botClient.SendDocument(
-                        chatId: message.Chat.Id,
-                        document: new InputFileStream(report15.FileStream, report15.FileDownloadName),
-                        caption: $"📆 {userCompany.Name} kompaniyasi uchun 15 kunlik tashrif hisobot fayli",
-                        cancellationToken: ct);
+                    await Handle15DaysReportCommand(botClient, message, userCompany, reportService, ct);
                     break;
 
                 case "/new_attendance":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    pendingCommands[userId] = "newAttendance";
-
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "📮 Iltimos, xodimning RFID UID kodini yuboring.",
-                        cancellationToken: ct);
+                    await HandleNewAttendanceCommand(botClient, message, userCompany, userId, ct);
                     break;
 
                 case "/update_employee":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    pendingCommands[userId] = "updateEmployee";
-
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "✏️ Iltimos, xodimning *RFID UID va to‘liq ismini* vergul bilan ajratib yuboring.\n\nMisol:\n`00 00 00 00, Eshmat Toshmatov`",
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
+                    await HandleUpdateEmployeeCommand(botClient, message, userCompany, userId, ct);
                     break;
 
                 case "/checked_in":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    var checkedInEmployees = await attendancesRepository.GetAllCheckInAsync(userCompany.Id, ct);
-                    if (!checkedInEmployees.Any())
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "ℹ️ Hozirda hech bir xodim ishda emas.",
-                            cancellationToken: ct);
-                    }
-                    else
-                    {
-                        var inLines = checkedInEmployees
-                            .Select(a =>
-                            {
-                                var uzTime = TimeHelper.ToUzbekistanTime(a!.CheckIn);
-                                return $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {uzTime:HH:mm:ss}";
-                            });
-
-                        var checkedInText = "✅ *Hozirda ishda bo‘lgan xodimlar:*\n" + string.Join("\n", inLines);
-
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: checkedInText,
-                            parseMode: ParseMode.Markdown,
-                            cancellationToken: ct);
-                    }
+                    await HandleCheckedInCommand(botClient, message, userCompany, attendancesRepository, ct);
                     break;
 
                 case "/checked_out":
-                    if (userCompany is null)
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    var checkedOutEmployees = await attendancesRepository.GetAllCheckOutAsync(userCompany.Id, ct);
-                    if (!checkedOutEmployees.Any())
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "ℹ️ Hozircha hech bir xodim ishni yakunlamagan.",
-                            cancellationToken: ct);
-                    }
-                    else
-                    {
-                        var outLines = checkedOutEmployees
-                            .Select(a =>
-                            {
-                                var uzTime = TimeHelper.ToUzbekistanTime(a!.CheckOut!.Value);
-                                return $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {uzTime:HH:mm:ss}";
-                            });
-                        var checkedOutText = "🏁 *Bugun ishni tugatgan xodimlar:*\n" + string.Join("\n", outLines);
-
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: checkedOutText,
-                            parseMode: ParseMode.Markdown,
-                            cancellationToken: ct);
-                    }
+                    await HandleCheckedOutCommand(botClient, message, userCompany, attendancesRepository, ct);
                     break;
+
+                // Mind this command
+                // case "/cancel":
+                //     pendingCommands.Remove(userId, out _);
+                //     await botClient.SendMessage(
+                //         chatId: message.Chat.Id,
+                //         text: "🚫 Amal bekor qilindi.",
+                //         cancellationToken: ct);
+                //     break;
 
                 default:
                     await botClient.SendMessage(
