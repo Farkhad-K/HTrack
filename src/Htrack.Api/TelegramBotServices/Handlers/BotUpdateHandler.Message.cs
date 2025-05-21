@@ -86,7 +86,8 @@ public partial class BotUpdateHandler
                     return;
                 }
 
-                var rfidUid = inputParts[0].Trim().Replace(" ", "").ToUpperInvariant();
+                // var rfidUid = inputParts[0].Trim().Replace(" ", "").ToUpperInvariant();
+                var rfidUid = inputParts[0].Trim().ToUpperInvariant();
                 var fullName = inputParts[1].Trim();
 
                 try
