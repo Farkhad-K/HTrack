@@ -197,6 +197,10 @@ public partial class BotUpdateHandler
                     await Handle15DaysReportCommand(botClient, message, userCompany, reportService, ct);
                     break;
 
+                case "/report_till_today":
+                    await HandleReportTillTodayCommand(botClient, message, userCompany, reportService, ct);
+                    break;
+
                 case "/new_attendance":
                     await HandleNewAttendanceCommand(botClient, message, userCompany, userId, ct);
                     break;
