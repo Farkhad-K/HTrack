@@ -24,6 +24,7 @@ public partial class BotUpdateHandler
             "🔹 */update_employee* - Xodim ismini RFID orqali yangilash\n" +
             "🔹 */checked_in* - Hozir ishda bo‘lgan xodimlar ro‘yxati\n" +
             "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro‘yxati\n\n" +
+            "🔹 */report_till_today* - Ushbu buyruq orqali oyning 1-chisidan bugungacha bo'lgan ishchilarni ish vaqti yozilgan excel hisobotini olish mumkin\n\n" +
             "ℹ️ Yuqoridagi buyruqlar yordamida kompaniyangizning tashrif tizimi bilan samarali ishlang.";
 
         var welcomeText = userCompany is not null
