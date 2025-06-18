@@ -179,6 +179,117 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
         }
     }
 
+    public async Task GenerateReportFromStartToTodayAsync(CancellationToken cancellationToken = default)
+    {
+        var companies = await context.Companies.Include(c => c.Employees).ToListAsync(cancellationToken);
+        var now = DateTime.UtcNow;
+        var startDay = 1;
+        var endDay = now.Day;
+        var periodName = $"1dan{endDay}";
+
+        foreach (var company in companies)
+        {
+            var attendances = await context.Attendances
+                .Include(a => a.Employee)
+                .Where(a => a.Employee!.CompanyId == company.Id &&
+                            a.CheckIn.Month == now.Month &&
+                            a.CheckIn.Year == now.Year &&
+                            a.CheckIn.Day >= startDay && a.CheckIn.Day <= endDay)
+                .ToListAsync(cancellationToken);
+
+            if (!attendances.Any()) continue;
+
+            attendances = attendances
+                .DistinctBy(a => new { a.EmployeeId, a.CheckIn, a.CheckOut })
+                .OrderBy(a => a.Employee!.Name)
+                .ThenBy(a => a.CheckIn)
+                .ToList();
+
+            var timestamp = now.ToString("yyyyMMdd_HHmmss");
+            var fileName = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}_{timestamp}.xlsx";
+            var filePath = Path.Combine(env.ContentRootPath, "Reports", fileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(filePath)!);
+
+            using var workbook = new XLWorkbook();
+            var worksheet = workbook.Worksheets.Add("Davomat");
+
+            worksheet.Cell(1, 1).Value = "Ishchi";
+            worksheet.Cell(1, 2).Value = "Kelgan vaqti";
+            worksheet.Cell(1, 3).Value = "Ketgan vaqti";
+            worksheet.Cell(1, 4).Value = "Ishlagan soati";
+            worksheet.Row(1).Style.Font.Bold = true;
+
+            int row = 2;
+            var grouped = attendances.GroupBy(a => a.Employee!.Name);
+
+            foreach (var group in grouped)
+            {
+                var employeeName = group.Key!;
+                TimeSpan totalDuration = TimeSpan.Zero;
+                bool isFirstRow = true;
+
+                foreach (var a in group)
+                {
+                    var checkIn = TimeHelper.ToUzbekistanTime(a.CheckIn);
+                    var checkOut = a.CheckOut.HasValue ? TimeHelper.ToUzbekistanTime(a.CheckOut.Value) : (DateTime?)null;
+
+                    worksheet.Cell(row, 1).Value = isFirstRow ? $"{employeeName} - {a.Employee!.RFIDCardUID}" : "";
+                    worksheet.Cell(row, 2).Value = checkIn.ToString("d-MMMM yyyy HH:mm", _uzCulture);
+                    worksheet.Cell(row, 3).Value = checkOut?.ToString("d-MMMM yyyy HH:mm", _uzCulture) ?? "Yo'q";
+                    worksheet.Cell(row, 4).Value = a.Duration.ToString(@"hh\:mm");
+
+                    if (isFirstRow)
+                        worksheet.Cell(row, 1).Style.Fill.BackgroundColor = XLColor.LightGreen;
+
+                    totalDuration += a.Duration;
+                    isFirstRow = false;
+                    row++;
+                }
+
+                worksheet.Cell(row, 3).Value = "Jami";
+                worksheet.Cell(row, 4).Value = $"{(int)totalDuration.TotalHours:D2}:{totalDuration.Minutes:D2}";
+                worksheet.Row(row).Style.Font.Bold = true;
+                worksheet.Cell(row, 3).Style.Fill.BackgroundColor = XLColor.LightYellow;
+                worksheet.Cell(row, 4).Style.Fill.BackgroundColor = XLColor.Yellow;
+
+                row += 2;
+            }
+
+            worksheet.Columns().AdjustToContents();
+            var usedRange = worksheet.RangeUsed();
+            usedRange!.Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+            usedRange.Style.Border.InsideBorder = XLBorderStyleValues.Medium;
+
+            workbook.SaveAs(filePath);
+        }
+    }
+
+    public async Task<FileStreamResult?> GetFromStartToTodayAsync(Guid companyId)
+    {
+        var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
+        if (company == null) return null;
+
+        // Regenerate to ensure latest file
+        await GenerateReportFromStartToTodayAsync();
+
+        var now = DateTime.UtcNow;
+        var endDay = now.Day;
+        var periodName = $"1dan{endDay}";
+        var reportDir = Path.Combine(env.ContentRootPath, "Reports");
+
+        var pattern = $"{company.Name}_{now.ToString("MMMM", _uzCulture)}_{now.Year}_davomat_{periodName}_*.xlsx";
+        var files = Directory.GetFiles(reportDir, pattern);
+
+        if (!files.Any()) return null;
+
+        var latestFile = files.OrderByDescending(File.GetCreationTime).First();
+        var stream = new FileStream(latestFile, FileMode.Open, FileAccess.Read);
+        return new FileStreamResult(stream, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        {
+            FileDownloadName = Path.GetFileName(latestFile)
+        };
+    }
+
     public async Task<FileStreamResult?> Get15DayReportAsync(Guid companyId)
     {
         var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId);
@@ -203,6 +314,7 @@ public class ExcelReportService(IHTrackDbContext context, IWebHostEnvironment en
             FileDownloadName = Path.GetFileName(latestFile)
         };
     }
+
 
     public async Task<FileStreamResult?> GetLastMonthReportAsync(Guid companyId)
     {

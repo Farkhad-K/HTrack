@@ -120,6 +120,38 @@ public partial class BotUpdateHandler
             cancellationToken: ct);
     }
 
+    private static async Task HandleReportTillTodayCommand(
+        ITelegramBotClient botClient, Message message,
+        Company? userCompany,
+        IExcelReportService reportService, CancellationToken ct)
+    {
+        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+            return;
+
+        var report = await reportService.GetFromStartToTodayAsync(userCompany!.Id);
+
+        if (report is null)
+        {
+            await reportService.GenerateReportFromStartToTodayAsync(ct);
+            report = await reportService.GetFromStartToTodayAsync(userCompany.Id);
+
+            if (report is null)
+            {
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: "⚠️ Bugungu kungacha hisobotni yaratish uchun ma’lumot topilmadi.",
+                    cancellationToken: ct);
+                return;
+            }
+        }
+
+        await botClient.SendDocument(
+            chatId: message.Chat.Id,
+            document: new InputFileStream(report.FileStream, report.FileDownloadName),
+            caption: $"📆 {userCompany.Name} kompaniyasi uchun 1-dan bugungacha tashrif hisobot fayli",
+            cancellationToken: ct);
+    }
+
     private static async Task HandleCheckedInCommand(
     ITelegramBotClient botClient,
     Message message,
