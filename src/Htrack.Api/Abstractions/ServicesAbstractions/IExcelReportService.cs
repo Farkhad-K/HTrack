@@ -6,5 +6,7 @@ public interface IExcelReportService
     Task<FileStreamResult?> GetLastMonthReportAsync(Guid companyId);
 
     Task Generate15DayAttendanceReportsAsync(CancellationToken cancellationToken = default);
+    Task GenerateReportFromStartToTodayAsync(CancellationToken cancellationToken = default);
     Task<FileStreamResult?> Get15DayReportAsync(Guid companyId);
+    Task<FileStreamResult?> GetFromStartToTodayAsync(Guid companyId);
 }
