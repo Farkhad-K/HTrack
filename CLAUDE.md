@@ -154,17 +154,30 @@ Multi-step commands use `ConcurrentDictionary<long, string> pendingCommands` key
 - **Company "Xulosa"**: merged title row, header row, one row per employee (days, total hours, avg hours/day)
 - **Company "Batafsil"**: `Ishchi | Kelgan vaqti | Ketgan vaqti | Ishlagan soati` — first row of each employee group highlighted green
 - **Employee "Xulosa"**: header row + single data row for that employee
-- **Employee "Batafsil"**: employee name as title (merged row 1), then `Sana | Kelgan vaqti | Ketgan vaqti | Ishlagan soati`
+- **Employee "Batafsil"** (`BuildEmployeeDetailSheet` — `ExcelReportService.Employee.cs`):
+  - Row 1: employee name (merged 4 cols, bold, size 13, centered)
+  - Row 2: `Kelish | Ketish | Smena soati | Kun jami` (LightBlue, bold, frozen)
+  - Shift rows: `Kelish` = `dd.MM.yyyy HH:mm`, `Ketish` = `dd.MM.yyyy HH:mm` or `—`, `Smena soati` = shift HH:mm, `Kun jami` = empty
+  - After each day's last shift: **day-subtotal row** — cols 1–3 merged `"dd.MM.yyyy — Kun jami"`, col 4 = day total (LightYellow, bold)
+  - Last row: **grand total** — cols 1–3 merged `"Jami"`, col 4 = period total (Yellow, bold)
+  - Grouped by `TimeHelper.ToUzbekistanTime(CheckIn).Date`, ordered by date then check-in time
 
-### Coloring rules (both layouts)
-- Red (`#FFE0E0`): duration < 4h
-- Green (`#E0FFE0`): duration ≥ 8h
-- First row of each group in company reports: `LightGreen` across all 4 columns (overrides duration color — it's a visual separator)
+### Coloring rules
+- Red (`#FFE0E0`): duration < 4h — shift rows only (both company and employee detail)
+- Green (`#E0FFE0`): duration ≥ 8h — shift rows only
+- No color if `CheckOut` is null (open shift) — employee detail only
+- First row of each group in **company** "Batafsil": `LightGreen` (overrides duration color — visual separator)
+- Day-subtotal rows in **employee** "Batafsil": `LightYellow`
+- Grand total row in **employee** "Batafsil": `Yellow`
 
 ### Overnight shifts
 Shifts that start on day X and end on day X+1 (or even a different month) are **attributed to the CheckIn date**. The filter is always on `a.CheckIn`, not `a.CheckOut`. A shift starting March 31 at 22:00 and ending April 1 at 06:00 appears in the **March** report with its full 8h duration. This is intentional — do not change the filter logic.
 
 Old reports cleaned up hourly via Hangfire `ReportCleanupService`.
+
+**`ExcelReportService` is split into partial classes:**
+- `ExcelReportService.cs` — company-wide reports + shared helpers (`QueryAttendances`, `BuildWorkbook`, `BuildSummarySheet`, `BuildDetailSheet`)
+- `ExcelReportService.Employee.cs` — all per-employee methods (`GetEmployee*`, `BuildEmployeeReport`, `BuildEmployeeSummarySheet`, `BuildEmployeeDetailSheet`)
 
 ---
 

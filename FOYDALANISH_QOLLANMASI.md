@@ -223,9 +223,10 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 |------|---------|
 | 🟢 Yashil fon | Xodim 8 soat va undan ko'p ishlagan |
 | 🔴 Qizil fon | Xodim 4 soatdan kam ishlagan |
-| Rangsiz | 4–8 soat oralig'ida ishlagan |
+| Rangsiz | 4–8 soat oralig'ida ishlagan yoki hali ishdan chiqmagan |
 | 🟩 To'q yashil — birinchi qator | Kompaniya hisobotida har bir xodimning ajratuvchi qatori |
-| 🟡 Sariq — "Jami" qatori | Har bir xodim uchun jami ishlagan soat |
+| 🟨 Och sariq — "Kun jami" qatori | Xodim hisobotida har kunning yig'indi soati |
+| 🟡 Sariq — "Jami" qatori | Butun davr uchun umumiy jami ishlagan soat |
 
 ---
 
@@ -233,14 +234,21 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 
 **Xulosa varaqi** — bir qator: xodim ismi, ish kunlari soni, jami soat, o'rtacha soat/kun.
 
-**Batafsil varaqi** — har bir kelish-ketish alohida qatorda:
+**Batafsil varaqi** — har bir kelish-ketish alohida qatorda, kunlar bo'yicha guruhlangan:
 
-| Sana | Kelgan vaqti | Ketgan vaqti | Ishlagan soati |
-|------|--------------|--------------|----------------|
-| 14.03.2025 | 08:45 | 17:30 | 08:45 |
-| 15.03.2025 | 09:00 | — | 00:00 |
+| Kelish | Ketish | Smena soati | Kun jami |
+|--------|--------|-------------|----------|
+| 14.03.2025 08:45 | 14.03.2025 17:30 | 08:45 | |
+| 14.03.2025 — Kun jami | | | 08:45 |
+| 15.03.2025 09:00 | — | 00:00 | |
+| 15.03.2025 — Kun jami | | | 00:00 |
+| Jami | | | 08:45 |
 
-> **"Ketgan vaqti" bo'sh (`—`) bo'lsa** — xodim hali ishdan chiqmagan yoki check-out qilinmagan.
+- Har kunning oxirida **"Kun jami"** qatori (och sariq fonda) ko'rsatiladi
+- Eng oxirgi **"Jami"** qatori (sariq fonda) — butun davr yig'indisi
+- Tungi smena uchun: kelish va ketish sanasi-vaqti to'liq ko'rsatiladi (masalan `31.03.2025 22:00` → `01.04.2025 06:00`)
+
+> **"Ketish" bo'sh (`—`) bo'lsa** — xodim hali ishdan chiqmagan yoki check-out qilinmagan. Rang ko'rsatilmaydi.
 
 ---
 
@@ -271,7 +279,7 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 **Javob:** Tanlangan sana oralig'ida hech qanday davomat yozuvi yo'q. RFID skaneri ishlaganini tekshiring yoki sana oralig'ini kengaytiring.
 
 **Savol:** Bir xodim bir kunda bir necha marta chiqib-kirsa?
-**Javob:** Har bir juft (kelish–ketish) alohida qatorda ko'rsatiladi. Jami soat barcha yozuvlar yig'indisi.
+**Javob:** Har bir juft (kelish–ketish) alohida qatorda ko'rsatiladi. Kunning barcha smenalari tugagach, "Kun jami" qatori o'sha kunning umumiy soatini ko'rsatadi.
 
 **Savol:** 15 kunlik hisobot nima uchun ba'zan boshqa sanalarni ko'rsatadi?
 **Javob:** Joriy oy 1–15-kuni ichida bo'lsangiz 1–15, 16-kunidan keyin bo'lsangiz 16–oy oxiri ko'rsatiladi. Bu avtomatik aniqlanadi.
