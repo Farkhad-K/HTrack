@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd \"C:\\\\Users\\\\Farxod\\\\dev\\\\personal\\\\HTrack\" && dotnet build src/Htrack.Api/Htrack.Api.csproj 2>&1)",
+      "Bash(cd \"C:\\\\Users\\\\Farxod\\\\dev\\\\personal\\\\HTrack\" && dotnet build src/Htrack.Api/Htrack.Api.csproj --configuration Release --no-restore 2>&1)"
+    ]
+  }
+}

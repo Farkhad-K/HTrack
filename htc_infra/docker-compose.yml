@@ -8,7 +8,7 @@ services:
   htrack:
     container_name: htrack
     build:
-      context: ./../src/Htrack.Api
+      context: ./../
       dockerfile: ./Dockerfile
     depends_on:
       postgres:
