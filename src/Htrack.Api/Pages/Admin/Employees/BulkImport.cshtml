@@ -1,0 +1,61 @@
+@page
+@model HTrack.Api.Pages.Admin.Employees.BulkImportModel
+@{
+    ViewData["Title"] = "Ommaviy yuklash";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h4>Xodimlarni ommaviy yuklash</h4>
+    <a asp-page="Index" asp-route-companyId="@Model.SelectedCompanyId" class="btn btn-outline-secondary btn-sm">← Orqaga</a>
+</div>
+
+@if (Model.Error != null)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+@if (Model.Created.HasValue)
+{
+    <div class="alert alert-success">@Model.Created ta xodim qo'shildi.</div>
+}
+
+@if (Model.ImportErrors.Count > 0)
+{
+    <div class="alert alert-warning">
+        <strong>Quyidagi qatorlarda xatolik:</strong>
+        <ul class="mb-0 mt-1">
+            @foreach (var err in Model.ImportErrors)
+            {
+                <li>@err</li>
+            }
+        </ul>
+    </div>
+}
+
+<div class="card mb-4" style="max-width:520px">
+    <div class="card-body">
+        <p class="mb-2 text-muted small">
+            Shablon faylni yuklab oling, to'ldiring va qayta yuboring.
+            Fayl ikki ustundan iborat bo'lishi kerak: <strong>Ism</strong> va <strong>RFID Card UID</strong>.
+        </p>
+        <a href="/api/employees/bulk-import-template" class="btn btn-outline-primary btn-sm mb-3">⬇ Shablon yuklash</a>
+
+        <form method="post" enctype="multipart/form-data">
+            <div class="mb-3">
+                <label for="companySelect" class="form-label">Kompaniya</label>
+                <select id="companySelect" name="companyId" class="form-select">
+                    <option value="">— Kompaniya tanlang —</option>
+                    @foreach (var c in Model.Companies)
+                    {
+                        <option value="@c.Id" selected="@(c.Id == Model.SelectedCompanyId)">@c.Name</option>
+                    }
+                </select>
+            </div>
+            <div class="mb-3">
+                <label for="fileInput" class="form-label">Excel fayl (.xlsx)</label>
+                <input id="fileInput" type="file" name="file" accept=".xlsx" class="form-control" />
+            </div>
+            <button type="submit" class="btn btn-primary">Yuklash</button>
+        </form>
+    </div>
+</div>

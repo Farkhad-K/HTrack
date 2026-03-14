@@ -43,6 +43,32 @@ public class EmployeesRepository(
         => await context.Employees.Include(e => e.Company).FirstOrDefaultAsync(e => e.CompanyId == companyId && e.RFIDCardUID == rfidCardUID, cancellationToken)
            ?? throw new EmployeeWithUIDNotFoundException(rfidCardUID);
 
+    public async ValueTask<(int Created, List<string> Errors)> BulkAddAsync(
+        IEnumerable<Employee> employees, CancellationToken cancellationToken = default)
+    {
+        int created = 0;
+        var errors = new List<string>();
+
+        foreach (var employee in employees)
+        {
+            try
+            {
+                context.Employees.Add(employee);
+                await context.SaveChangesAsync(cancellationToken);
+                created++;
+            }
+            catch (Exception ex)
+            {
+                if (context is DbContext dbCtx)
+                    dbCtx.ChangeTracker.Clear();
+                var msg = ex.InnerException?.Message ?? ex.Message;
+                errors.Add($"{employee.Name} (RFID: {employee.RFIDCardUID}): {msg}");
+            }
+        }
+
+        return (created, errors);
+    }
+
     public async ValueTask<Employee> UpdateAsync(Guid companyId, string rfidCardUID, Employee update, CancellationToken cancellationToken = default)
     {
         var companyExists = await context.Companies.AnyAsync(c => c.Id == companyId, cancellationToken);

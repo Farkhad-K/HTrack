@@ -90,89 +90,34 @@ public partial class BotUpdateHandler
                         return;
                     }
 
-                    if (pendingCmd == "awaitingFromDate")
+                    if (pendingCmd == "awaitingRfidFor15Day")
                     {
-                        if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var fromDate))
-                        {
-                            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
-                            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
-                            {
-                                ClearUserPendingState(userId);
-                                await botClient.SendMessage(chatId: message.Chat.Id,
-                                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
-                            }
-                            else
-                            {
-                                await botClient.SendMessage(
-                                    chatId: message.Chat.Id,
-                                    text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `01.01.2025`",
-                                    parseMode: ParseMode.Markdown,
-                                    cancellationToken: ct);
-                            }
-                            return;
-                        }
-
-                        retryCounters.Remove(userId, out _);
-                        pendingCommands[userId] = $"customReport:{fromDate:yyyy-MM-dd}";
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "🗓 Tugash sanasini kiriting (format: `dd.MM.yyyy`)\nMisol: `31.01.2025`",
-                            parseMode: ParseMode.Markdown,
-                            cancellationToken: ct);
+                        await HandleAwaitingRfidFor15Day(botClient, message, userCompany, userId, text, reportService, ct);
                         return;
                     }
 
-                    if (pendingCmd.StartsWith("customReport:"))
+                    if (pendingCmd == "awaitingRfidForMonthToDate")
                     {
-                        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
-                        {
-                            ClearUserPendingState(userId);
-                            return;
-                        }
+                        await HandleAwaitingRfidForMonthToDate(botClient, message, userCompany, userId, text, reportService, ct);
+                        return;
+                    }
 
-                        var fromDateStr = pendingCmd["customReport:".Length..];
-                        if (!DateOnly.TryParseExact(fromDateStr, "yyyy-MM-dd", out var fromDate))
-                        {
-                            ClearUserPendingState(userId);
-                            await botClient.SendMessage(chatId: message.Chat.Id, text: "⚠️ Ichki xatolik. Qayta urinib ko'ring.", cancellationToken: ct);
-                            return;
-                        }
+                    if (pendingCmd == "awaitingRfidForCustom")
+                    {
+                        await HandleAwaitingRfidForCustom(botClient, message, userCompany, userId, text, employeesRepository, ct);
+                        return;
+                    }
 
-                        if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var toDate))
-                        {
-                            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
-                            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
-                            {
-                                ClearUserPendingState(userId);
-                                await botClient.SendMessage(chatId: message.Chat.Id,
-                                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
-                            }
-                            else
-                            {
-                                await botClient.SendMessage(
-                                    chatId: message.Chat.Id,
-                                    text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `31.01.2025`",
-                                    parseMode: ParseMode.Markdown,
-                                    cancellationToken: ct);
-                            }
-                            return;
-                        }
+                    if (pendingCmd.StartsWith("awaitingFromDateEmployee:"))
+                    {
+                        var rfid = pendingCmd["awaitingFromDateEmployee:".Length..];
+                        await HandleAwaitingFromDateEmployee(botClient, message, userId, rfid, text, ct);
+                        return;
+                    }
 
-                        ClearUserPendingState(userId);
-
-                        try
-                        {
-                            var (stream, fileName) = await reportService.GetCustomRangeReportAsync(userCompany!.Id, fromDate, toDate, ct);
-                            await botClient.SendDocument(
-                                chatId: message.Chat.Id,
-                                document: new InputFileStream(stream, fileName),
-                                caption: $"🗓 {userCompany.Name}: {fromDate:dd.MM.yyyy} – {toDate:dd.MM.yyyy} davomat hisoboti",
-                                cancellationToken: ct);
-                        }
-                        catch (Exception ex)
-                        {
-                            await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
-                        }
+                    if (pendingCmd.StartsWith("customReportEmployee:"))
+                    {
+                        await HandleCustomReportEmployee(botClient, message, userCompany, userId, pendingCmd, text, reportService, ct);
                         return;
                     }
 
@@ -203,7 +148,11 @@ public partial class BotUpdateHandler
                     break;
 
                 case "/15daysreport":
-                    await Handle15DaysReportCommand(botClient, message, userCompany, reportService, ct);
+                    await Handle15DaysReportCommand(botClient, message, userCompany, userId, ct);
+                    break;
+
+                case "/employee_monthly":
+                    await HandleEmployeeMonthlyCommand(botClient, message, userCompany, userId, ct);
                     break;
 
                 case "/report_till_today":
@@ -250,6 +199,7 @@ public partial class BotUpdateHandler
         "📅 15 kunlik"      => "/15daysreport",
         "📆 Bugunga"        => "/report_till_today",
         "🗓 Ixtiyoriy sana" => "/custom_report",
+        "📋 Xodim oylik"    => "/employee_monthly",
         "✏️ Davomat"        => "/new_attendance",
         "🔄 Yangilash"      => "/update_employee",
         _ => text

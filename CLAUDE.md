@@ -28,7 +28,7 @@ src/Htrack.Api/
     └── Admin/
         ├── _Layout.cshtml           # Bootstrap 5 CDN, sidebar nav, active link detection
         ├── Companies/               # CRUD + CompanyFormHelper (shared ParseManagerIds)
-        ├── Employees/               # CRUD with company-scoped filter
+        ├── Employees/               # CRUD + BulkImport (xlsx upload) with company-scoped filter
         ├── Attendances/             # Today's checked-in + checked-out view
         └── Reports/                 # Excel download (4 report types)
 ```
@@ -62,6 +62,8 @@ GET    api/companies/
 POST   api/companies/create-company
 GET    api/employees/get-all-employees/{companyId}
 POST   api/employees/create-employee
+POST   api/employees/bulk-import?companyId={guid}                    ← multipart/form-data (.xlsx)
+GET    api/employees/bulk-import-template                            ← streams template .xlsx
 GET    api/reports/generate
 GET    api/reports/download
 ```
@@ -101,6 +103,14 @@ GET    api/reports/download
 - Sends group notifications via `TelegramAttendanceNotifier` on each check-in/out
 - Manager commands restricted by checking `Company.ManagerTgUserIDs`
 
+### Keyboard layout (3-3-4)
+
+```
+Row 1: 👥 Xodimlar | ✅ Ishda | 🚪 Ishdan chiqdi
+Row 2: 📊 O'tgan oy | 📆 Bugunga | 📋 Xodim oylik
+Row 3: 📅 15 kunlik | 🗓 Ixtiyoriy sana | ✏️ Davomat | 🔄 Yangilash
+```
+
 ### Pending State Machine (`BotUpdateHandler`)
 
 Multi-step commands use `ConcurrentDictionary<long, string> pendingCommands` keyed by Telegram user ID.
@@ -109,8 +119,13 @@ Multi-step commands use `ConcurrentDictionary<long, string> pendingCommands` key
 |-----------|--------|----------|
 | `"updateEmployee"` | `/update_employee` | `RFID, Full Name` |
 | `"newAttendance"` | `/new_attendance` | RFID UID |
-| `"awaitingFromDate"` | `/custom_report` | `dd.MM.yyyy` from-date |
-| `"customReport:{yyyy-MM-dd}"` | `awaitingFromDate` success | `dd.MM.yyyy` to-date |
+| `"awaitingRfidFor15Day"` | `/15daysreport` | RFID UID |
+| `"awaitingRfidForMonthToDate"` | `/employee_monthly` | RFID UID |
+| `"awaitingRfidForCustom"` | `/custom_report` | RFID UID |
+| `"awaitingFromDateEmployee:{rfid}"` | `awaitingRfidForCustom` success | `dd.MM.yyyy` from-date |
+| `"customReportEmployee:{rfid}:{yyyy-MM-dd}"` | `awaitingFromDateEmployee` success | `dd.MM.yyyy` to-date |
+
+**`NormaliseRfid(string input)`** — static helper on `BotUpdateHandler`: `input.Trim().Replace(" ", "").ToUpperInvariant()`. All RFID-awaiting handlers use this before lookup.
 
 **Escape & retry rules (implemented 2026-03-14):**
 - **Command interception**: any keyboard button or `/command` received while in a pending state is detected via `MapButtonToCommand(text).StartsWith('/')` → state is cleared and the command executes normally.
@@ -122,10 +137,32 @@ Multi-step commands use `ConcurrentDictionary<long, string> pendingCommands` key
 
 ## Excel Reports (ClosedXML)
 
-Three report types, all stored in `/app/Reports/`:
-1. Last 30 days
-2. Last 15 days
-3. Month-to-date (1st → today)
+### Company-wide reports (streamed directly, not stored on disk)
+| Button / Command | Method | Coverage |
+|-----------------|--------|---------|
+| `📊 O'tgan oy` | `GetLastMonthReportAsync` | Previous calendar month |
+| `📆 Bugunga` | `GetFromStartToTodayAsync` | 1st of current month → today |
+
+### Per-employee reports (new — ask for RFID first)
+| Button / Command | Method | Coverage |
+|-----------------|--------|---------|
+| `📅 15 kunlik` | `GetEmployee15DayReportAsync` | Current half-month (1–15 or 16–end) |
+| `📋 Xodim oylik` | `GetEmployeeMonthToDateReportAsync` | 1st of current month → today |
+| `🗓 Ixtiyoriy sana` | `GetEmployeeCustomRangeReportAsync` | User-specified from/to dates |
+
+### Sheet layouts
+- **Company "Xulosa"**: merged title row, header row, one row per employee (days, total hours, avg hours/day)
+- **Company "Batafsil"**: `Ishchi | Kelgan vaqti | Ketgan vaqti | Ishlagan soati` — first row of each employee group highlighted green
+- **Employee "Xulosa"**: header row + single data row for that employee
+- **Employee "Batafsil"**: employee name as title (merged row 1), then `Sana | Kelgan vaqti | Ketgan vaqti | Ishlagan soati`
+
+### Coloring rules (both layouts)
+- Red (`#FFE0E0`): duration < 4h
+- Green (`#E0FFE0`): duration ≥ 8h
+- First row of each group in company reports: `LightGreen` across all 4 columns (overrides duration color — it's a visual separator)
+
+### Overnight shifts
+Shifts that start on day X and end on day X+1 (or even a different month) are **attributed to the CheckIn date**. The filter is always on `a.CheckIn`, not `a.CheckOut`. A shift starting March 31 at 22:00 and ending April 1 at 06:00 appears in the **March** report with its full 8h duration. This is intentional — do not change the filter logic.
 
 Old reports cleaned up hourly via Hangfire `ReportCleanupService`.
 

@@ -32,6 +32,10 @@ public class EmployeesService(
     public async ValueTask<Employee> GetEmployeeByRfidAsync(Guid companyId, string rfidCardUID, CancellationToken cancellationToken = default)
         => await employeesRepository.GetByRfidAsync(companyId, rfidCardUID, cancellationToken);
 
+    public ValueTask<(int Created, List<string> Errors)> BulkAddAsync(
+        IEnumerable<Employee> employees, CancellationToken cancellationToken = default)
+        => employeesRepository.BulkAddAsync(employees, cancellationToken);
+
     public ValueTask<Employee> UpdateEmployeeAsync(Guid companyId, string rfidCardUID, Employee update, CancellationToken cancellationToken = default)
     {
         try

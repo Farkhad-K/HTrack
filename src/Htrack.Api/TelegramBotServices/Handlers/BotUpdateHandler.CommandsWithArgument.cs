@@ -25,6 +25,24 @@ public partial class BotUpdateHandler
             cancellationToken: ct);
     }
 
+    private async Task HandleCustomReportCommand(
+        ITelegramBotClient botClient,
+        Message message,
+        Company? userCompany,
+        long userId,
+        CancellationToken ct)
+    {
+        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+            return;
+
+        pendingCommands[userId] = "awaitingRfidForCustom";
+
+        await botClient.SendMessage(
+            chatId: message.Chat.Id,
+            text: "🗓 Xodimning RFID kodini kiriting:",
+            cancellationToken: ct);
+    }
+
     private async Task HandleUpdateEmployeeCommand(
         ITelegramBotClient botClient,
         Message message,

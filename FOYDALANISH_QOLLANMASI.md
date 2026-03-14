@@ -23,10 +23,11 @@ Botni ochganda pastda doimiy tugmalar paneli ko'rinadi:
 | 👥 Xodimlar | Barcha xodimlar va RFID kodlari ro'yxati |
 | ✅ Ishda | Hozir ishda bo'lgan xodimlar |
 | 🚪 Ishdan chiqdi | Bugun ishni tugatgan xodimlar |
-| 📊 O'tgan oy | O'tgan oy uchun Excel hisoboti |
-| 📅 15 kunlik | Joriy oyning 15 kunlik hisoboti |
-| 📆 Bugunga | Oy boshidan bugunga qadar hisobot |
-| 🗓 Ixtiyoriy sana | O'zingiz belgilagan sana oralig'i hisoboti |
+| 📊 O'tgan oy | O'tgan oy uchun kompaniya Excel hisoboti |
+| 📆 Bugunga | Oy boshidan bugunga qadar kompaniya hisoboti |
+| 📋 Xodim oylik | Bitta xodimning oy boshidan bugunga hisoboti |
+| 📅 15 kunlik | Bitta xodimning joriy 15 kunlik hisoboti |
+| 🗓 Ixtiyoriy sana | Bitta xodimning o'zingiz belgilagan sana hisoboti |
 | ✏️ Davomat | Qo'lda davomat kiritish (RFID orqali) |
 | 🔄 Yangilash | Xodim ismini RFID orqali yangilash |
 
@@ -38,7 +39,7 @@ Botni ochganda pastda doimiy tugmalar paneli ko'rinadi:
 
 ### `/cancel` — Amalni bekor qilish
 
-Ko'p bosqichli buyruq davomida (`/custom_report`, `/new_attendance`, `/update_employee`) jarayonni to'xtatish uchun ishlating.
+Ko'p bosqichli buyruq davomida jarayonni to'xtatish uchun ishlating.
 
 - Har qanday holatda ishlaydi — hech qanday amal kutilmayotgan bo'lsa ham xato bermaydi.
 - Istalgan tugmani bosish ham xuddi shu ishni bajaradi.
@@ -46,85 +47,130 @@ Ko'p bosqichli buyruq davomida (`/custom_report`, `/new_attendance`, `/update_em
 ---
 
 ### `/employees` — Xodimlar ro'yxati
+
 Kompaniyangizdagi barcha xodimlarni va ularning RFID karta kodlarini ko'rsatadi.
 
 ```
 👥 Xodimlar ro'yxati:
-• Eshmat Toshmatov (RFID: AB CD EF 01)
-• Dilnoza Yusupova (RFID: 12 34 56 78)
+• Eshmat Toshmatov (RFID: ABCDEF01)
+• Dilnoza Yusupova (RFID: 12345678)
 ```
 
 ---
 
 ### `/checked_in` — Hozir ishda
+
 Hozirgi vaqtda ish joyida bo'lgan (check-in qilgan, lekin check-out qilmagan) xodimlar ro'yxati.
 
 ```
 ✅ Hozirda ishda bo'lgan xodimlar:
-• Eshmat Toshmatov (RFID: AB CD EF 01) at 08:45:12
+• Eshmat Toshmatov (RFID: ABCDEF01) at 08:45:12
 ```
 
 ---
 
 ### `/checked_out` — Bugun ketganlar
+
 Bugun ish vaqtini yakunlagan xodimlar ro'yxati.
 
 ```
 🏁 Bugun ishni tugatgan xodimlar:
-• Dilnoza Yusupova (RFID: 12 34 56 78) at 17:30:05
+• Dilnoza Yusupova (RFID: 12345678) at 17:30:05
 ```
 
 ---
 
-### `/excel_report` — O'tgan oy hisoboti
-O'tgan kalendar oyi uchun to'liq Excel fayli yuboriladi.
+### `/excel_report` — O'tgan oy kompaniya hisoboti
+
+O'tgan kalendar oyi uchun kompaniyadagi barcha xodimlarning Excel fayli yuboriladi.
 
 Fayl ikki varaqdan iborat:
 - **Xulosa** — har bir xodim uchun ish kunlari soni, jami soat, o'rtacha soat/kun
-- **Batafsil** — har bir kelish-ketish yozuvi (vaqt, davomiylik)
+- **Batafsil** — har bir kelish-ketish yozuvi (sana, vaqt, davomiylik)
 
 ---
 
-### `/15daysreport` — 15 kunlik hisobot
-Joriy oyning birinchi yoki ikkinchi yarmini avtomatik aniqlaydi:
+### `/report_till_today` — Oy boshidan bugunga kompaniya hisoboti
+
+Joriy oyning 1-kunidan bugungi sanagacha bo'lgan barcha xodimlar davomatini o'z ichiga oladi.
+
+---
+
+### `/15daysreport` — Xodimning 15 kunlik hisoboti
+
+Joriy oyning birinchi yoki ikkinchi yarmini avtomatik aniqlaydi va **bitta xodim** uchun hisobot beradi.
+
+**Qadamlar:**
+
+1. `/15daysreport` yuboring yoki `📅 15 kunlik` tugmasini bosing
+2. Bot RFID kodni so'raydi:
+   ```
+   📅 Xodimning RFID kodini kiriting:
+   ```
+3. RFID kodni yuboring:
+   ```
+   ABCDEF01
+   ```
+4. Bot xodimning shaxsiy Excel faylini yuboradi.
+
+**Qaysi davr hisoblanadi?**
 - Oy 1–15 kunlari ichida bo'lsangiz → 1-15-kun oralig'i
 - Oy 16-kunidan keyin bo'lsangiz → 16-oy oxiri oralig'i
 
 ---
 
-### `/report_till_today` — Oy boshidan bugunga
-Joriy oyning 1-kunidan bugungi sanagacha bo'lgan barcha davomatni o'z ichiga oladi.
+### `/employee_monthly` — Xodimning oylik hisoboti
+
+Joriy oyning 1-kunidan bugungi sanagacha bitta xodim uchun hisobot.
+
+**Qadamlar:**
+
+1. `/employee_monthly` yuboring yoki `📋 Xodim oylik` tugmasini bosing
+2. Bot RFID kodni so'raydi:
+   ```
+   📋 Xodimning RFID kodini kiriting:
+   ```
+3. RFID kodni yuboring
+4. Bot xodimning shaxsiy Excel faylini yuboradi.
 
 ---
 
-### `/custom_report` — Ixtiyoriy sana oralig'i hisoboti
+### `/custom_report` — Xodimning ixtiyoriy sana hisoboti
 
-Siz belgilagan ikki sana orasidagi davomatni Excel formatida beradi.
+Siz belgilagan ikki sana orasidagi **bitta xodim** davomatini Excel formatida beradi.
 
 **Qadamlar:**
 
 1. `/custom_report` yuboring yoki `🗓 Ixtiyoriy sana` tugmasini bosing
-2. Bot boshlanish sanasini so'raydi:
+2. Bot RFID kodni so'raydi:
+   ```
+   🗓 Xodimning RFID kodini kiriting:
+   ```
+3. RFID kodni yuboring:
+   ```
+   ABCDEF01
+   ```
+4. Bot boshlanish sanasini so'raydi:
    ```
    🗓 Boshlanish sanasini kiriting (format: dd.MM.yyyy)
    Misol: 01.01.2025
    ```
-3. Sanani kiriting, masalan:
+5. Sanani kiriting:
    ```
    15.02.2025
    ```
-4. Bot tugash sanasini so'raydi:
+6. Bot tugash sanasini so'raydi:
    ```
-   📅 Tugash sanasini kiriting (format: dd.MM.yyyy)
+   🗓 Tugash sanasini kiriting (format: dd.MM.yyyy)
    Misol: 31.01.2025
    ```
-5. Tugash sanasini kiriting:
+7. Tugash sanasini kiriting:
    ```
    28.02.2025
    ```
-6. Bot Excel faylni yuboradi.
+8. Bot Excel faylni yuboradi.
 
-> **Format qat'iy:** `kun.oy.yil` — masalan `05.03.2025`. Boshqa format ishlmaydi.
+> **Format qat'iy:** `kun.oy.yil` — masalan `05.03.2025`. Boshqa format ishlamaydi.
 
 ---
 
@@ -139,7 +185,7 @@ RFID skaner ishlamagan yoki xodim kartasiz kelgan holatlarda qo'lda check-in/che
    ```
    📮 Iltimos, xodimning RFID UID kodini yuboring.
    ```
-3. RFID kodni yuboring (bo'sh joy bilan ajratilgan hex formatida):
+3. RFID kodni yuboring (bo'sh joy bilan yoki joylashtirib):
    ```
    AB CD EF 01
    ```
@@ -178,14 +224,42 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 | 🟢 Yashil fon | Xodim 8 soat va undan ko'p ishlagan |
 | 🔴 Qizil fon | Xodim 4 soatdan kam ishlagan |
 | Rangsiz | 4–8 soat oralig'ida ishlagan |
+| 🟩 To'q yashil — birinchi qator | Kompaniya hisobotida har bir xodimning ajratuvchi qatori |
 | 🟡 Sariq — "Jami" qatori | Har bir xodim uchun jami ishlagan soat |
+
+---
+
+## Xodim hisobot varaqlarining tuzilishi
+
+**Xulosa varaqi** — bir qator: xodim ismi, ish kunlari soni, jami soat, o'rtacha soat/kun.
+
+**Batafsil varaqi** — har bir kelish-ketish alohida qatorda:
+
+| Sana | Kelgan vaqti | Ketgan vaqti | Ishlagan soati |
+|------|--------------|--------------|----------------|
+| 14.03.2025 | 08:45 | 17:30 | 08:45 |
+| 15.03.2025 | 09:00 | — | 00:00 |
+
+> **"Ketgan vaqti" bo'sh (`—`) bo'lsa** — xodim hali ishdan chiqmagan yoki check-out qilinmagan.
+
+---
+
+## Tungi smenalar va oy chegarasi
+
+**Muhim:** Hisobot filtri har doim **kelish vaqti (CheckIn)** asosida ishlaydi.
+
+**Misol:** Xodim 31-mart kuni soat 22:00 da keldi va 1-aprel soat 06:00 da ketdi (8 soat ishladi).
+- Bu yozuv **mart oyining** hisobotida ko'rinadi — aprelda emas.
+- Davomiylik to'liq **8 soat** ko'rsatiladi, chunki ketish vaqti boshqa oyda bo'lsa ham, davomiylik (Duration) bazada to'liq saqlanadi.
+
+**Sababi:** Smenani "qaysi oyga tegishli" deb belgilashda kelish vaqti mantiqliyroq va kutilgan — agar ishchi kechqurun kirsa, u shu kunning smenasidir.
 
 ---
 
 ## Tez-tez so'raladigan savollar
 
 **Savol:** RFID kodi qaysi formatda kiritiladi?
-**Javob:** Bo'sh joy bilan ajratilgan hex baytlar — masalan `AB CD EF 01` yoki `00 1A 2B 3C`.
+**Javob:** Bo'sh joy bilan ajratilgan yoki bitishmagan hex baytlar — masalan `AB CD EF 01` yoki `ABCDEF01`. Tizim avtomatik ravishda bo'shliqlarni olib tashlaydi va katta harflarga o'tkazadi.
 
 **Savol:** Sana noto'g'ri formatda kiritsam nima bo'ladi?
 **Javob:** Bot xato xabarini ko'rsatadi va yana kiritish imkonini beradi. 3 marta ketma-ket xato kiritilsa, jarayon avtomatik bekor qilinadi — buyruqni qaytadan boshlang.
@@ -194,7 +268,16 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 **Javob:** `/cancel` yuboring yoki istalgan tugmani bosing. Bot "Amal bekor qilindi" deb asosiy menyuga qaytaradi.
 
 **Savol:** Hisobot bo'sh kelsa?
-**Javob:** Tanlangan sana oralig'ida hech qanday davomat yozuvi yo'q. RFID skaneri ishlaganini tekshiring.
+**Javob:** Tanlangan sana oralig'ida hech qanday davomat yozuvi yo'q. RFID skaneri ishlaganini tekshiring yoki sana oralig'ini kengaytiring.
 
 **Savol:** Bir xodim bir kunda bir necha marta chiqib-kirsa?
 **Javob:** Har bir juft (kelish–ketish) alohida qatorda ko'rsatiladi. Jami soat barcha yozuvlar yig'indisi.
+
+**Savol:** 15 kunlik hisobot nima uchun ba'zan boshqa sanalarni ko'rsatadi?
+**Javob:** Joriy oy 1–15-kuni ichida bo'lsangiz 1–15, 16-kunidan keyin bo'lsangiz 16–oy oxiri ko'rsatiladi. Bu avtomatik aniqlanadi.
+
+**Savol:** Kompaniya hisoboti bilan xodim hisoboti farqi nima?
+**Javob:** `📊 O'tgan oy` va `📆 Bugunga` — kompaniyadagi **barcha** xodimlarni o'z ichiga oladi. `📅 15 kunlik`, `📋 Xodim oylik`, `🗓 Ixtiyoriy sana` — faqat siz ko'rsatgan RFID kodi bo'yicha **bitta xodim** uchun hisobot beradi.
+
+**Savol:** Tungi smena boshqa oyga o'tib ketsa, qaysi oyda hisoblanadi?
+**Javob:** Kelish vaqti (CheckIn) qaysi oyda bo'lsa, shu oyning hisobotida ko'rinadi. Masalan, mart kechqurun kirgan xodim mart hisobotida bo'ladi, hatto aprel tongida ketsa ham. Ishlagan soatlar to'liq hisobga olinadi.

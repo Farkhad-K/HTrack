@@ -20,6 +20,8 @@ public partial class BotUpdateHandler(
         retryCounters.Remove(userId, out _);
     }
 
+    private static string NormaliseRfid(string input) => input.Trim().Replace(" ", "").ToUpperInvariant();
+
     public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
     {
         // logger.LogError(exception, "Error in bot handler: {Source}", source);
