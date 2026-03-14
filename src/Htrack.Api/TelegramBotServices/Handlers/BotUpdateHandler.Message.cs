@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using HTrack.Api.Abstractions.RepositoriesAbstractions;
 using HTrack.Api.Entities;
 using HTrack.Api.Utilities;
@@ -28,10 +27,10 @@ public partial class BotUpdateHandler
     }
 
     private static async Task<bool> EnsureCompanyAccess(
-    ITelegramBotClient botClient,
-    Message message,
-    Company? userCompany,
-    CancellationToken ct)
+        ITelegramBotClient botClient,
+        Message message,
+        Company? userCompany,
+        CancellationToken ct)
     {
         if (userCompany is null)
         {
@@ -62,122 +61,95 @@ public partial class BotUpdateHandler
             var userCompany = companies.FirstOrDefault(c => c.ManagerTgUserIDs.Contains(from.Id));
 
             var userId = from.Id;
+            var text = message.Text.Trim();
 
-            if (pendingCommands.TryGetValue(userId, out var pendingCmd) && pendingCmd == "updateEmployee")
+            // --- Pending state handlers ---
+
+            if (pendingCommands.TryGetValue(userId, out var pendingCmd))
             {
-                if (userCompany is null)
+                if (pendingCmd == "updateEmployee")
                 {
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                        cancellationToken: ct);
-                    pendingCommands.Remove(userId, out _);
+                    await HandleUpdateEmployeePending(botClient, message, userCompany, userId, text, employeesRepository, ct);
                     return;
                 }
 
-                var inputParts = message.Text.Split(',', 2);
-                if (inputParts.Length != 2)
+                if (pendingCmd == "newAttendance")
                 {
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "⚠️ Maʼlumotni quyidagi formatda yuboring: `RFID_UID, To‘liq ism`\nMisol: `00 00 00 00, Eshmat Toshmatov`",
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
+                    await HandleNewAttendancePending(botClient, message, userCompany, userId, text, attendancesRepository, ct);
                     return;
                 }
 
-                // var rfidUid = inputParts[0].Trim().Replace(" ", "").ToUpperInvariant();
-                var rfidUid = inputParts[0].Trim().ToUpperInvariant();
-                var fullName = inputParts[1].Trim();
-
-                try
+                if (pendingCmd == "awaitingFromDate")
                 {
-                    var updated = await employeesRepository.UpdateAsync(userCompany.Id, rfidUid, new Employee
-                    {
-                        Name = fullName
-                    }, ct);
-
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: $"✅ Yangilangan xodim:\nRFID: `{updated.RFIDCardUID}`\nIsm: *{updated.Name}*",
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
-                }
-                catch (Exception ex)
-                {
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: $"⚠️ Xatolik: {ex.Message}",
-                        cancellationToken: ct);
-                }
-
-                pendingCommands.Remove(userId, out _);
-                return;
-            }
-            if (pendingCommands.TryGetValue(userId, out var pending) && pending == "newAttendance")
-            {
-                if (userCompany is null)
-                {
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.",
-                        cancellationToken: ct);
-                    pendingCommands.Remove(userId, out _);
-                    return;
-                }
-
-                try
-                {
-                    var rfidUid = message.Text.Trim().Replace(" ", "").ToUpperInvariant();
-                    var employee = await attendancesRepository.GetEmployeeByRfidAsync(userCompany.Id, rfidUid, ct);
-
-                    if (employee == null)
+                    if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var fromDate))
                     {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: $"❌ Ushbu RFID bo‘yicha xodim topilmadi: `{rfidUid}`.",
+                            text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `01.01.2025`",
                             parseMode: ParseMode.Markdown,
                             cancellationToken: ct);
+                        return;
+                    }
+
+                    pendingCommands[userId] = $"customReport:{fromDate:yyyy-MM-dd}";
+                    await botClient.SendMessage(
+                        chatId: message.Chat.Id,
+                        text: "🗓 Tugash sanasini kiriting (format: `dd.MM.yyyy`)\nMisol: `31.01.2025`",
+                        parseMode: ParseMode.Markdown,
+                        cancellationToken: ct);
+                    return;
+                }
+
+                if (pendingCmd.StartsWith("customReport:"))
+                {
+                    if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+                    {
                         pendingCommands.Remove(userId, out _);
                         return;
                     }
 
-                    var lastAttendance = await attendancesRepository.GetLastAttendanceAsync(employee.Id, ct);
-
-                    if (lastAttendance is null || lastAttendance.CheckOut != null)
+                    var fromDateStr = pendingCmd["customReport:".Length..];
+                    if (!DateOnly.TryParseExact(fromDateStr, "yyyy-MM-dd", out var fromDate))
                     {
-                        await attendancesRepository.CheckInAsync(employee.Id, ct);
+                        pendingCommands.Remove(userId, out _);
+                        await botClient.SendMessage(chatId: message.Chat.Id, text: "⚠️ Ichki xatolik. Qayta urinib ko'ring.", cancellationToken: ct);
+                        return;
+                    }
+
+                    if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var toDate))
+                    {
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: $"✅ *{employee.Name}* ishga keldi (RFID: `{employee.RFIDCardUID}`)",
+                            text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `31.01.2025`",
                             parseMode: ParseMode.Markdown,
                             cancellationToken: ct);
+                        return;
                     }
-                    else
-                    {
-                        await attendancesRepository.CheckOutAsync(lastAttendance, ct);
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: $"✅ *{employee.Name}* ishni tugatdi (RFID: `{employee.RFIDCardUID}`)",
-                            parseMode: ParseMode.Markdown,
-                            cancellationToken: ct);
-                    }
-                }
-                catch (Exception ex)
-                {
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: $"⚠️ Xatolik: {ex.Message}",
-                        cancellationToken: ct);
-                }
 
-                // Clear the pending command
-                pendingCommands.Remove(userId, out _);
-                return;
+                    pendingCommands.Remove(userId, out _);
+
+                    try
+                    {
+                        var (stream, fileName) = await reportService.GetCustomRangeReportAsync(userCompany!.Id, fromDate, toDate, ct);
+                        await botClient.SendDocument(
+                            chatId: message.Chat.Id,
+                            document: new InputFileStream(stream, fileName),
+                            caption: $"🗓 {userCompany.Name}: {fromDate:dd.MM.yyyy} – {toDate:dd.MM.yyyy} davomat hisoboti",
+                            cancellationToken: ct);
+                    }
+                    catch (Exception ex)
+                    {
+                        await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
+                    }
+                    return;
+                }
             }
 
-            // Handle regular commands
-            switch (message.Text.Trim())
+            // --- Command / button switch ---
+
+            var command = MapButtonToCommand(text);
+
+            switch (command)
             {
                 case "/start":
                     await HandleStartCommand(botClient, message, userCompany, ct);
@@ -185,10 +157,8 @@ public partial class BotUpdateHandler
 
                 case "/employees":
                     await HandleEmployeesCommand(botClient, message, userCompany, employeesRepository, ct);
-                    // return;
                     break;
 
-                // change to /excelReportLastMonth
                 case "/excel_report":
                     await HandleExcelReportCommand(botClient, message, userCompany, reportService, ct);
                     break;
@@ -199,6 +169,10 @@ public partial class BotUpdateHandler
 
                 case "/report_till_today":
                     await HandleReportTillTodayCommand(botClient, message, userCompany, reportService, ct);
+                    break;
+
+                case "/custom_report":
+                    await HandleCustomReportCommand(botClient, message, userCompany, userId, ct);
                     break;
 
                 case "/new_attendance":
@@ -217,15 +191,6 @@ public partial class BotUpdateHandler
                     await HandleCheckedOutCommand(botClient, message, userCompany, attendancesRepository, ct);
                     break;
 
-                // Mind this command
-                // case "/cancel":
-                //     pendingCommands.Remove(userId, out _);
-                //     await botClient.SendMessage(
-                //         chatId: message.Chat.Id,
-                //         text: "🚫 Amal bekor qilindi.",
-                //         cancellationToken: ct);
-                //     break;
-
                 default:
                     await botClient.SendMessage(
                         chatId: message.Chat.Id,
@@ -237,11 +202,120 @@ public partial class BotUpdateHandler
         }, cancellationToken);
     }
 
+    private static string MapButtonToCommand(string text) => text switch
+    {
+        "👥 Xodimlar"       => "/employees",
+        "✅ Ishda"          => "/checked_in",
+        "🚪 Ishdan chiqdi"  => "/checked_out",
+        "📊 O'tgan oy"      => "/excel_report",
+        "📅 15 kunlik"      => "/15daysreport",
+        "📆 Bugunga"        => "/report_till_today",
+        "🗓 Ixtiyoriy sana" => "/custom_report",
+        "✏️ Davomat"        => "/new_attendance",
+        "🔄 Yangilash"      => "/update_employee",
+        _ => text
+    };
+
+    private async Task HandleUpdateEmployeePending(
+        ITelegramBotClient botClient, Message message, Company? userCompany,
+        long userId, string text, IEmployeesRepository employeesRepository, CancellationToken ct)
+    {
+        if (userCompany is null)
+        {
+            await botClient.SendMessage(chatId: message.Chat.Id, text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.", cancellationToken: ct);
+            pendingCommands.Remove(userId, out _);
+            return;
+        }
+
+        var inputParts = text.Split(',', 2);
+        if (inputParts.Length != 2)
+        {
+            await botClient.SendMessage(
+                chatId: message.Chat.Id,
+                text: "⚠️ Maʼlumotni quyidagi formatda yuboring: `RFID_UID, To'liq ism`\nMisol: `00 00 00 00, Eshmat Toshmatov`",
+                parseMode: ParseMode.Markdown,
+                cancellationToken: ct);
+            return;
+        }
+
+        var rfidUid = inputParts[0].Trim().ToUpperInvariant();
+        var fullName = inputParts[1].Trim();
+
+        try
+        {
+            var updated = await employeesRepository.UpdateAsync(userCompany.Id, rfidUid, new Employee { Name = fullName }, ct);
+            await botClient.SendMessage(
+                chatId: message.Chat.Id,
+                text: $"✅ Yangilangan xodim:\nRFID: `{updated.RFIDCardUID}`\nIsm: *{updated.Name}*",
+                parseMode: ParseMode.Markdown,
+                cancellationToken: ct);
+        }
+        catch (Exception ex)
+        {
+            await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
+        }
+
+        pendingCommands.Remove(userId, out _);
+    }
+
+    private async Task HandleNewAttendancePending(
+        ITelegramBotClient botClient, Message message, Company? userCompany,
+        long userId, string text, IAttendancesRepository attendancesRepository, CancellationToken ct)
+    {
+        if (userCompany is null)
+        {
+            await botClient.SendMessage(chatId: message.Chat.Id, text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.", cancellationToken: ct);
+            pendingCommands.Remove(userId, out _);
+            return;
+        }
+
+        try
+        {
+            var rfidUid = text.Replace(" ", "").ToUpperInvariant();
+            var employee = await attendancesRepository.GetEmployeeByRfidAsync(userCompany.Id, rfidUid, ct);
+
+            if (employee == null)
+            {
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: $"❌ Ushbu RFID bo'yicha xodim topilmadi: `{rfidUid}`.",
+                    parseMode: ParseMode.Markdown,
+                    cancellationToken: ct);
+                pendingCommands.Remove(userId, out _);
+                return;
+            }
+
+            var lastAttendance = await attendancesRepository.GetLastAttendanceAsync(employee.Id, ct);
+
+            if (lastAttendance is null || lastAttendance.CheckOut != null)
+            {
+                await attendancesRepository.CheckInAsync(employee.Id, ct);
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: $"✅ *{employee.Name}* ishga keldi (RFID: `{employee.RFIDCardUID}`)",
+                    parseMode: ParseMode.Markdown,
+                    cancellationToken: ct);
+            }
+            else
+            {
+                await attendancesRepository.CheckOutAsync(lastAttendance, ct);
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: $"✅ *{employee.Name}* ishni tugatdi (RFID: `{employee.RFIDCardUID}`)",
+                    parseMode: ParseMode.Markdown,
+                    cancellationToken: ct);
+            }
+        }
+        catch (Exception ex)
+        {
+            await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
+        }
+
+        pendingCommands.Remove(userId, out _);
+    }
 
     private static async Task HandleUnknownMessageAsync(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)
     {
-        var from = message.From;
-
         await botClient.SendMessage(
             chatId: message.Chat.Id,
             text: "Nomaʼlum xabar turi: " + message.Type,

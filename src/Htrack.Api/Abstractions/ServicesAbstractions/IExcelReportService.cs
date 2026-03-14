@@ -1,12 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
-
 public interface IExcelReportService
 {
-    Task GenerateMonthlyAttendanceReportsAsync(CancellationToken cancellationToken = default);
-    Task<FileStreamResult?> GetLastMonthReportAsync(Guid companyId);
-
-    Task Generate15DayAttendanceReportsAsync(CancellationToken cancellationToken = default);
-    Task GenerateReportFromStartToTodayAsync(CancellationToken cancellationToken = default);
-    Task<FileStreamResult?> Get15DayReportAsync(Guid companyId);
-    Task<FileStreamResult?> GetFromStartToTodayAsync(Guid companyId);
+    Task<(MemoryStream Stream, string FileName)> GetLastMonthReportAsync(Guid companyId, CancellationToken ct = default);
+    Task<(MemoryStream Stream, string FileName)> Get15DayReportAsync(Guid companyId, CancellationToken ct = default);
+    Task<(MemoryStream Stream, string FileName)> GetFromStartToTodayAsync(Guid companyId, CancellationToken ct = default);
+    Task<(MemoryStream Stream, string FileName)> GetCustomRangeReportAsync(Guid companyId, DateOnly from, DateOnly to, CancellationToken ct = default);
 }

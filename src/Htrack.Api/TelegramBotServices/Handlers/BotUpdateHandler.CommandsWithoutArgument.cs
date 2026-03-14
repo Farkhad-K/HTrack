@@ -1,7 +1,9 @@
+using System.Collections.Concurrent;
 using Telegram.Bot;
 using Telegram.Bot.Types;
 using HTrack.Api.Entities;
 using Telegram.Bot.Types.Enums;
+using Telegram.Bot.Types.ReplyMarkups;
 using HTrack.Api.Abstractions.RepositoriesAbstractions;
 using HTrack.Api.Utilities;
 
@@ -9,32 +11,43 @@ namespace HTrack.Api.TelegramBotServices;
 
 public partial class BotUpdateHandler
 {
+    private static readonly ReplyKeyboardMarkup MainKeyboard = new(
+    [
+        new KeyboardButton[] { "👥 Xodimlar", "✅ Ishda", "🚪 Ishdan chiqdi" },
+        new KeyboardButton[] { "📊 O'tgan oy", "📅 15 kunlik", "📆 Bugunga" },
+        new KeyboardButton[] { "🗓 Ixtiyoriy sana", "✏️ Davomat", "🔄 Yangilash" }
+    ])
+    {
+        ResizeKeyboard = true,
+        IsPersistent = true
+    };
+
     private static async Task HandleStartCommand(ITelegramBotClient botClient, Message message,
         Company? userCompany, CancellationToken ct)
     {
         var from = message.From!;
-        var greeting_HelpMsg =
+        var greetingHelpMsg =
             "✨ HTrack Botiga xush kelibsiz! ✨\n\n" +
-            "Quyidagi buyruqlardan foydalanishingiz mumkin:\n\n" +
-            "🔹 */start* - Xush kelibsiz xabari va kompaniya ruxsati\n" +
-            "🔹 */employees* - Barcha xodimlar va ularning RFID kodlari ro‘yxati\n" +
-            "🔹 */excel_report* - O‘tgan oy uchun Excel hisobotini yuklab olish\n" +
-            "🔹 */15daysreport* - So‘nggi 15 kunlik tashriflar hisobotini yuklab olish\n" +
-            "🔹 */new_attendance* - RFID orqali xodimni qo‘lda ro‘yxatdan o‘tkazish\n" +
+            "Quyidagi tugmalar yoki buyruqlardan foydalanishingiz mumkin:\n\n" +
+            "🔹 */employees* - Barcha xodimlar va ularning RFID kodlari ro'yxati\n" +
+            "🔹 */excel_report* - O'tgan oy uchun Excel hisobotini yuklab olish\n" +
+            "🔹 */15daysreport* - So'nggi 15 kunlik hisobotni yuklab olish\n" +
+            "🔹 */report_till_today* - Oy boshidan bugungacha hisobot\n" +
+            "🔹 */custom_report* - Ixtiyoriy sana oralig'i hisoboti\n" +
+            "🔹 */new_attendance* - RFID orqali xodimni qo'lda ro'yxatdan o'tkazish\n" +
             "🔹 */update_employee* - Xodim ismini RFID orqali yangilash\n" +
-            "🔹 */checked_in* - Hozir ishda bo‘lgan xodimlar ro‘yxati\n" +
-            "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro‘yxati\n\n" +
-            "🔹 */report_till_today* - Ushbu buyruq orqali oyning 1-chisidan bugungacha bo'lgan ishchilarni ish vaqti yozilgan excel hisobotini olish mumkin\n\n" +
-            "ℹ️ Yuqoridagi buyruqlar yordamida kompaniyangizning tashrif tizimi bilan samarali ishlang.";
+            "🔹 */checked_in* - Hozir ishda bo'lgan xodimlar ro'yxati\n" +
+            "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro'yxati";
 
         var welcomeText = userCompany is not null
-            ? $"👋 Assalomu alaykum, {from.FirstName}! Siz *{userCompany.Name}* kompaniyasiga ruxsatga egasiz.\n\n{greeting_HelpMsg}"
+            ? $"👋 Assalomu alaykum, {from.FirstName}! Siz *{userCompany.Name}* kompaniyasiga ruxsatga egasiz.\n\n{greetingHelpMsg}"
             : $"👋 Assalomu alaykum, {from.FirstName}! Siz hech qanday kompaniyaga ruxsatga ega emassiz.";
 
         await botClient.SendMessage(
             chatId: message.Chat.Id,
             text: welcomeText,
             parseMode: ParseMode.Markdown,
+            replyMarkup: MainKeyboard,
             cancellationToken: ct);
     }
 
@@ -42,9 +55,12 @@ public partial class BotUpdateHandler
         ITelegramBotClient botClient, Message message, Company? userCompany,
         IEmployeesRepository employeesRepository, CancellationToken ct)
     {
+        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+            return;
+
         var employees = await employeesRepository.GetAllAsync(userCompany!.Id, ct);
         var lines = employees.Select(e => $"• {e.Name} (RFID: `{e.RFIDCardUID}`)");
-        var messageText = "👥 Xodimlar ro‘yxati:\n" + string.Join("\n", lines);
+        var messageText = "👥 Xodimlar ro'yxati:\n" + string.Join("\n", lines);
 
         await botClient.SendMessage(
             chatId: message.Chat.Id,
@@ -61,33 +77,14 @@ public partial class BotUpdateHandler
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
 
-        var reportResult = await reportService.GetLastMonthReportAsync(userCompany!.Id);
-
-        if (reportResult is null)
-        {
-            await reportService.GenerateMonthlyAttendanceReportsAsync(ct);
-            reportResult = await reportService.GetLastMonthReportAsync(userCompany.Id);
-
-            if (reportResult is null)
-            {
-                await botClient.SendMessage(
-                    chatId: message.Chat.Id,
-                    text: "⚠️ O‘tgan oy uchun hisobot mavjud emas.",
-                    cancellationToken: ct);
-                return;
-            }
-        }
-
-        var fileStream = reportResult.FileStream;
-        var fileName = reportResult.FileDownloadName;
+        var (stream, fileName) = await reportService.GetLastMonthReportAsync(userCompany!.Id, ct);
 
         await botClient.SendDocument(
             chatId: message.Chat.Id,
-            document: new InputFileStream(fileStream, fileName),
-            caption: $"📊 {userCompany.Name} kompaniyasining o'tgan oy uchun, tashrif hisobot fayli",
+            document: new InputFileStream(stream, fileName),
+            caption: $"📊 {userCompany.Name} kompaniyasining o'tgan oy uchun davomat hisoboti",
             cancellationToken: ct);
     }
-
 
     private static async Task Handle15DaysReportCommand(
         ITelegramBotClient botClient, Message message,
@@ -97,27 +94,12 @@ public partial class BotUpdateHandler
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
 
-        var report15 = await reportService.Get15DayReportAsync(userCompany!.Id);
-
-        if (report15 is null)
-        {
-            await reportService.Generate15DayAttendanceReportsAsync(ct);
-            report15 = await reportService.Get15DayReportAsync(userCompany.Id);
-
-            if (report15 is null)
-            {
-                await botClient.SendMessage(
-                    chatId: message.Chat.Id,
-                    text: "⚠️ So‘nggi 15 kunlik hisobotni yaratish uchun ma’lumot topilmadi.",
-                    cancellationToken: ct);
-                return;
-            }
-        }
+        var (stream, fileName) = await reportService.Get15DayReportAsync(userCompany!.Id, ct);
 
         await botClient.SendDocument(
             chatId: message.Chat.Id,
-            document: new InputFileStream(report15.FileStream, report15.FileDownloadName),
-            caption: $"📆 {userCompany.Name} kompaniyasi uchun 15 kunlik tashrif hisobot fayli",
+            document: new InputFileStream(stream, fileName),
+            caption: $"📅 {userCompany.Name} kompaniyasi uchun 15 kunlik davomat hisoboti",
             cancellationToken: ct);
     }
 
@@ -129,36 +111,39 @@ public partial class BotUpdateHandler
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
 
-        var report = await reportService.GetFromStartToTodayAsync(userCompany!.Id);
-
-        if (report is null)
-        {
-            await reportService.GenerateReportFromStartToTodayAsync(ct);
-            report = await reportService.GetFromStartToTodayAsync(userCompany.Id);
-
-            if (report is null)
-            {
-                await botClient.SendMessage(
-                    chatId: message.Chat.Id,
-                    text: "⚠️ Bugungu kungacha hisobotni yaratish uchun ma’lumot topilmadi.",
-                    cancellationToken: ct);
-                return;
-            }
-        }
+        var (stream, fileName) = await reportService.GetFromStartToTodayAsync(userCompany!.Id, ct);
 
         await botClient.SendDocument(
             chatId: message.Chat.Id,
-            document: new InputFileStream(report.FileStream, report.FileDownloadName),
-            caption: $"📆 {userCompany.Name} kompaniyasi uchun 1-dan bugungacha tashrif hisobot fayli",
+            document: new InputFileStream(stream, fileName),
+            caption: $"📆 {userCompany.Name} kompaniyasi uchun oy boshidan bugungacha davomat hisoboti",
+            cancellationToken: ct);
+    }
+
+    private async Task HandleCustomReportCommand(
+        ITelegramBotClient botClient, Message message,
+        Company? userCompany,
+        long userId,
+        CancellationToken ct)
+    {
+        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+            return;
+
+        pendingCommands[userId] = "awaitingFromDate";
+
+        await botClient.SendMessage(
+            chatId: message.Chat.Id,
+            text: "🗓 Boshlanish sanasini kiriting (format: `dd.MM.yyyy`)\nMisol: `01.01.2025`",
+            parseMode: ParseMode.Markdown,
             cancellationToken: ct);
     }
 
     private static async Task HandleCheckedInCommand(
-    ITelegramBotClient botClient,
-    Message message,
-    Company? userCompany,
-    IAttendancesRepository attendancesRepository,
-    CancellationToken ct)
+        ITelegramBotClient botClient,
+        Message message,
+        Company? userCompany,
+        IAttendancesRepository attendancesRepository,
+        CancellationToken ct)
     {
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
@@ -179,7 +164,7 @@ public partial class BotUpdateHandler
                 return $"• {a!.Employee!.Name} (RFID: `{a.Employee.RFIDCardUID}`) at {uzTime:HH:mm:ss}";
             });
 
-            var checkedInText = "✅ *Hozirda ishda bo‘lgan xodimlar:*\n" + string.Join("\n", inLines);
+            var checkedInText = "✅ *Hozirda ishda bo'lgan xodimlar:*\n" + string.Join("\n", inLines);
 
             await botClient.SendMessage(
                 chatId: message.Chat.Id,
@@ -190,11 +175,11 @@ public partial class BotUpdateHandler
     }
 
     private static async Task HandleCheckedOutCommand(
-    ITelegramBotClient botClient,
-    Message message,
-    Company? userCompany,
-    IAttendancesRepository attendancesRepository,
-    CancellationToken ct)
+        ITelegramBotClient botClient,
+        Message message,
+        Company? userCompany,
+        IAttendancesRepository attendancesRepository,
+        CancellationToken ct)
     {
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
@@ -224,5 +209,4 @@ public partial class BotUpdateHandler
                 cancellationToken: ct);
         }
     }
-
 }
