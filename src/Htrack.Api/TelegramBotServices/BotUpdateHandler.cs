@@ -12,6 +12,13 @@ public partial class BotUpdateHandler(
     IServiceScopeFactory scopeFactory) : IUpdateHandler
 {
     private readonly ConcurrentDictionary<long, string> pendingCommands = new();
+    private readonly ConcurrentDictionary<long, int> retryCounters = new();
+
+    private void ClearUserPendingState(long userId)
+    {
+        pendingCommands.Remove(userId, out _);
+        retryCounters.Remove(userId, out _);
+    }
 
     public Task HandleErrorAsync(ITelegramBotClient botClient, Exception exception, HandleErrorSource source, CancellationToken cancellationToken)
     {

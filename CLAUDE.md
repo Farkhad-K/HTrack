@@ -89,6 +89,23 @@ GET    api/reports/download
 - Sends group notifications via `TelegramAttendanceNotifier` on each check-in/out
 - Manager commands restricted by checking `Company.ManagerTgUserIDs`
 
+### Pending State Machine (`BotUpdateHandler`)
+
+Multi-step commands use `ConcurrentDictionary<long, string> pendingCommands` keyed by Telegram user ID.
+
+| State key | Set by | Awaiting |
+|-----------|--------|----------|
+| `"updateEmployee"` | `/update_employee` | `RFID, Full Name` |
+| `"newAttendance"` | `/new_attendance` | RFID UID |
+| `"awaitingFromDate"` | `/custom_report` | `dd.MM.yyyy` from-date |
+| `"customReport:{yyyy-MM-dd}"` | `awaitingFromDate` success | `dd.MM.yyyy` to-date |
+
+**Escape & retry rules (implemented 2026-03-14):**
+- **Command interception**: any keyboard button or `/command` received while in a pending state is detected via `MapButtonToCommand(text).StartsWith('/')` → state is cleared and the command executes normally.
+- **Retry limit**: `ConcurrentDictionary<long, int> retryCounters` tracks consecutive format/validation errors per user. On the 3rd failure, `ClearUserPendingState()` is called and the user is told to restart the command. Counter resets on success or state transition.
+- **`/cancel`**: explicit escape hatch, always clears state (idempotent).
+- **`ClearUserPendingState(long userId)`**: private helper that removes from both `pendingCommands` and `retryCounters`. All state clears go through this — never call `.Remove` on the dicts directly.
+
 ---
 
 ## Excel Reports (ClosedXML)

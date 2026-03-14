@@ -67,81 +67,116 @@ public partial class BotUpdateHandler
 
             if (pendingCommands.TryGetValue(userId, out var pendingCmd))
             {
-                if (pendingCmd == "updateEmployee")
+                // Any known command/button while in a pending state cancels it
+                var mappedCmd = MapButtonToCommand(text);
+                if (mappedCmd.StartsWith('/'))
                 {
-                    await HandleUpdateEmployeePending(botClient, message, userCompany, userId, text, employeesRepository, ct);
-                    return;
+                    ClearUserPendingState(userId);
+                    await botClient.SendMessage(chatId: message.Chat.Id,
+                        text: "↩️ Avvalgi amal bekor qilindi.", cancellationToken: ct);
+                    // fall through to command routing below
                 }
-
-                if (pendingCmd == "newAttendance")
+                else
                 {
-                    await HandleNewAttendancePending(botClient, message, userCompany, userId, text, attendancesRepository, ct);
-                    return;
-                }
-
-                if (pendingCmd == "awaitingFromDate")
-                {
-                    if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var fromDate))
+                    if (pendingCmd == "updateEmployee")
                     {
+                        await HandleUpdateEmployeePending(botClient, message, userCompany, userId, text, employeesRepository, ct);
+                        return;
+                    }
+
+                    if (pendingCmd == "newAttendance")
+                    {
+                        await HandleNewAttendancePending(botClient, message, userCompany, userId, text, attendancesRepository, ct);
+                        return;
+                    }
+
+                    if (pendingCmd == "awaitingFromDate")
+                    {
+                        if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var fromDate))
+                        {
+                            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
+                            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
+                            {
+                                ClearUserPendingState(userId);
+                                await botClient.SendMessage(chatId: message.Chat.Id,
+                                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
+                            }
+                            else
+                            {
+                                await botClient.SendMessage(
+                                    chatId: message.Chat.Id,
+                                    text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `01.01.2025`",
+                                    parseMode: ParseMode.Markdown,
+                                    cancellationToken: ct);
+                            }
+                            return;
+                        }
+
+                        retryCounters.Remove(userId, out _);
+                        pendingCommands[userId] = $"customReport:{fromDate:yyyy-MM-dd}";
                         await botClient.SendMessage(
                             chatId: message.Chat.Id,
-                            text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `01.01.2025`",
+                            text: "🗓 Tugash sanasini kiriting (format: `dd.MM.yyyy`)\nMisol: `31.01.2025`",
                             parseMode: ParseMode.Markdown,
                             cancellationToken: ct);
                         return;
                     }
 
-                    pendingCommands[userId] = $"customReport:{fromDate:yyyy-MM-dd}";
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: "🗓 Tugash sanasini kiriting (format: `dd.MM.yyyy`)\nMisol: `31.01.2025`",
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
-                    return;
-                }
-
-                if (pendingCmd.StartsWith("customReport:"))
-                {
-                    if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+                    if (pendingCmd.StartsWith("customReport:"))
                     {
-                        pendingCommands.Remove(userId, out _);
+                        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+                        {
+                            ClearUserPendingState(userId);
+                            return;
+                        }
+
+                        var fromDateStr = pendingCmd["customReport:".Length..];
+                        if (!DateOnly.TryParseExact(fromDateStr, "yyyy-MM-dd", out var fromDate))
+                        {
+                            ClearUserPendingState(userId);
+                            await botClient.SendMessage(chatId: message.Chat.Id, text: "⚠️ Ichki xatolik. Qayta urinib ko'ring.", cancellationToken: ct);
+                            return;
+                        }
+
+                        if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var toDate))
+                        {
+                            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
+                            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
+                            {
+                                ClearUserPendingState(userId);
+                                await botClient.SendMessage(chatId: message.Chat.Id,
+                                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
+                            }
+                            else
+                            {
+                                await botClient.SendMessage(
+                                    chatId: message.Chat.Id,
+                                    text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `31.01.2025`",
+                                    parseMode: ParseMode.Markdown,
+                                    cancellationToken: ct);
+                            }
+                            return;
+                        }
+
+                        ClearUserPendingState(userId);
+
+                        try
+                        {
+                            var (stream, fileName) = await reportService.GetCustomRangeReportAsync(userCompany!.Id, fromDate, toDate, ct);
+                            await botClient.SendDocument(
+                                chatId: message.Chat.Id,
+                                document: new InputFileStream(stream, fileName),
+                                caption: $"🗓 {userCompany.Name}: {fromDate:dd.MM.yyyy} – {toDate:dd.MM.yyyy} davomat hisoboti",
+                                cancellationToken: ct);
+                        }
+                        catch (Exception ex)
+                        {
+                            await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
+                        }
                         return;
                     }
 
-                    var fromDateStr = pendingCmd["customReport:".Length..];
-                    if (!DateOnly.TryParseExact(fromDateStr, "yyyy-MM-dd", out var fromDate))
-                    {
-                        pendingCommands.Remove(userId, out _);
-                        await botClient.SendMessage(chatId: message.Chat.Id, text: "⚠️ Ichki xatolik. Qayta urinib ko'ring.", cancellationToken: ct);
-                        return;
-                    }
-
-                    if (!DateOnly.TryParseExact(text, "dd.MM.yyyy", out var toDate))
-                    {
-                        await botClient.SendMessage(
-                            chatId: message.Chat.Id,
-                            text: "⚠️ Noto'g'ri format. Iltimos `dd.MM.yyyy` formatida kiriting.\nMisol: `31.01.2025`",
-                            parseMode: ParseMode.Markdown,
-                            cancellationToken: ct);
-                        return;
-                    }
-
-                    pendingCommands.Remove(userId, out _);
-
-                    try
-                    {
-                        var (stream, fileName) = await reportService.GetCustomRangeReportAsync(userCompany!.Id, fromDate, toDate, ct);
-                        await botClient.SendDocument(
-                            chatId: message.Chat.Id,
-                            document: new InputFileStream(stream, fileName),
-                            caption: $"🗓 {userCompany.Name}: {fromDate:dd.MM.yyyy} – {toDate:dd.MM.yyyy} davomat hisoboti",
-                            cancellationToken: ct);
-                    }
-                    catch (Exception ex)
-                    {
-                        await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
-                    }
-                    return;
+                    return; // unknown pending state
                 }
             }
 
@@ -153,6 +188,10 @@ public partial class BotUpdateHandler
             {
                 case "/start":
                     await HandleStartCommand(botClient, message, userCompany, ct);
+                    break;
+
+                case "/cancel":
+                    await HandleCancelCommand(botClient, message, userId, ct);
                     break;
 
                 case "/employees":
@@ -223,18 +262,28 @@ public partial class BotUpdateHandler
         if (userCompany is null)
         {
             await botClient.SendMessage(chatId: message.Chat.Id, text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.", cancellationToken: ct);
-            pendingCommands.Remove(userId, out _);
+            ClearUserPendingState(userId);
             return;
         }
 
         var inputParts = text.Split(',', 2);
         if (inputParts.Length != 2)
         {
-            await botClient.SendMessage(
-                chatId: message.Chat.Id,
-                text: "⚠️ Maʼlumotni quyidagi formatda yuboring: `RFID_UID, To'liq ism`\nMisol: `00 00 00 00, Eshmat Toshmatov`",
-                parseMode: ParseMode.Markdown,
-                cancellationToken: ct);
+            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
+            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
+            {
+                ClearUserPendingState(userId);
+                await botClient.SendMessage(chatId: message.Chat.Id,
+                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
+            }
+            else
+            {
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: "⚠️ Maʼlumotni quyidagi formatda yuboring: `RFID_UID, To'liq ism`\nMisol: `00 00 00 00, Eshmat Toshmatov`",
+                    parseMode: ParseMode.Markdown,
+                    cancellationToken: ct);
+            }
             return;
         }
 
@@ -255,7 +304,7 @@ public partial class BotUpdateHandler
             await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
         }
 
-        pendingCommands.Remove(userId, out _);
+        ClearUserPendingState(userId);
     }
 
     private async Task HandleNewAttendancePending(
@@ -265,7 +314,7 @@ public partial class BotUpdateHandler
         if (userCompany is null)
         {
             await botClient.SendMessage(chatId: message.Chat.Id, text: "❌ Siz hech qanday kompaniya uchun ruxsatga ega emassiz.", cancellationToken: ct);
-            pendingCommands.Remove(userId, out _);
+            ClearUserPendingState(userId);
             return;
         }
 
@@ -276,12 +325,21 @@ public partial class BotUpdateHandler
 
             if (employee == null)
             {
-                await botClient.SendMessage(
-                    chatId: message.Chat.Id,
-                    text: $"❌ Ushbu RFID bo'yicha xodim topilmadi: `{rfidUid}`.",
-                    parseMode: ParseMode.Markdown,
-                    cancellationToken: ct);
-                pendingCommands.Remove(userId, out _);
+                retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
+                if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
+                {
+                    ClearUserPendingState(userId);
+                    await botClient.SendMessage(chatId: message.Chat.Id,
+                        text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
+                }
+                else
+                {
+                    await botClient.SendMessage(
+                        chatId: message.Chat.Id,
+                        text: $"❌ Ushbu RFID bo'yicha xodim topilmadi: `{rfidUid}`.",
+                        parseMode: ParseMode.Markdown,
+                        cancellationToken: ct);
+                }
                 return;
             }
 
@@ -311,7 +369,7 @@ public partial class BotUpdateHandler
             await botClient.SendMessage(chatId: message.Chat.Id, text: $"⚠️ Xatolik: {ex.Message}", cancellationToken: ct);
         }
 
-        pendingCommands.Remove(userId, out _);
+        ClearUserPendingState(userId);
     }
 
     private static async Task HandleUnknownMessageAsync(ITelegramBotClient botClient, Message message, CancellationToken cancellationToken)

@@ -37,7 +37,8 @@ public partial class BotUpdateHandler
             "🔹 */new_attendance* - RFID orqali xodimni qo'lda ro'yxatdan o'tkazish\n" +
             "🔹 */update_employee* - Xodim ismini RFID orqali yangilash\n" +
             "🔹 */checked_in* - Hozir ishda bo'lgan xodimlar ro'yxati\n" +
-            "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro'yxati";
+            "🔹 */checked_out* - Bugun ishni tugatgan xodimlar ro'yxati\n" +
+            "🔹 */cancel* - Joriy amalni bekor qilish";
 
         var welcomeText = userCompany is not null
             ? $"👋 Assalomu alaykum, {from.FirstName}! Siz *{userCompany.Name}* kompaniyasiga ruxsatga egasiz.\n\n{greetingHelpMsg}"
@@ -172,6 +173,17 @@ public partial class BotUpdateHandler
                 parseMode: ParseMode.Markdown,
                 cancellationToken: ct);
         }
+    }
+
+    private async Task HandleCancelCommand(
+        ITelegramBotClient botClient, Message message, long userId, CancellationToken ct)
+    {
+        ClearUserPendingState(userId);
+        await botClient.SendMessage(
+            chatId: message.Chat.Id,
+            text: "✅ Amal bekor qilindi.",
+            replyMarkup: MainKeyboard,
+            cancellationToken: ct);
     }
 
     private static async Task HandleCheckedOutCommand(

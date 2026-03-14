@@ -147,9 +147,9 @@ public class ExcelReportService(IHTrackDbContext context) : IExcelReportService
         ws.Cell(2, 3).Value = "Jami soat";
         ws.Cell(2, 4).Value = "O'rtacha soat/kun";
 
-        var headerRow = ws.Row(2);
-        headerRow.Style.Font.Bold = true;
-        headerRow.Style.Fill.BackgroundColor = XLColor.LightBlue;
+        var headerRange = ws.Range(2, 1, 2, 4);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
 
         ws.SheetView.FreezeRows(2);
 
@@ -187,9 +187,9 @@ public class ExcelReportService(IHTrackDbContext context) : IExcelReportService
         ws.Cell(1, 3).Value = "Ketgan vaqti";
         ws.Cell(1, 4).Value = "Ishlagan soati";
 
-        var headerRow = ws.Row(1);
-        headerRow.Style.Font.Bold = true;
-        headerRow.Style.Fill.BackgroundColor = XLColor.LightBlue;
+        var headerRange = ws.Range(1, 1, 1, 4);
+        headerRange.Style.Font.Bold = true;
+        headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
 
         ws.SheetView.FreezeRows(1);
 
@@ -213,9 +213,9 @@ public class ExcelReportService(IHTrackDbContext context) : IExcelReportService
 
                 // Conditional row color based on duration
                 if (a.Duration < TimeSpan.FromHours(4))
-                    ws.Row(row).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFE0E0");
+                    ws.Range(row, 1, row, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFE0E0");
                 else if (a.Duration >= TimeSpan.FromHours(8))
-                    ws.Row(row).Style.Fill.BackgroundColor = XLColor.FromHtml("#E0FFE0");
+                    ws.Range(row, 1, row, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#E0FFE0");
 
                 if (isFirstRow)
                     ws.Cell(row, 1).Style.Fill.BackgroundColor = XLColor.LightGreen;
@@ -227,7 +227,7 @@ public class ExcelReportService(IHTrackDbContext context) : IExcelReportService
 
             ws.Cell(row, 3).Value = "Jami";
             ws.Cell(row, 4).Value = $"{(int)totalDuration.TotalHours:D2}:{totalDuration.Minutes:D2}";
-            ws.Row(row).Style.Font.Bold = true;
+            ws.Range(row, 1, row, 4).Style.Font.Bold = true;
             ws.Cell(row, 3).Style.Fill.BackgroundColor = XLColor.LightYellow;
             ws.Cell(row, 4).Style.Fill.BackgroundColor = XLColor.Yellow;
 
