@@ -1,0 +1,27 @@
+@page
+@model HTrack.Api.Pages.Admin.Employees.EditModel
+@{
+    ViewData["Title"] = "Xodimni tahrirlash";
+}
+
+<h4 class="mb-3">Xodimni tahrirlash</h4>
+
+@if (Model.Error != null)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+<form method="post" style="max-width:500px">
+    <input type="hidden" name="companyId" value="@Model.CompanyId" />
+    <input type="hidden" name="rfid" value="@Model.Rfid" />
+    <div class="mb-3">
+        <label for="rfidDisplay" class="form-label">RFID Card UID</label>
+        <input type="text" id="rfidDisplay" class="form-control" value="@Model.Rfid" disabled />
+    </div>
+    <div class="mb-3">
+        <label for="name" class="form-label">Ismi</label>
+        <input type="text" id="name" name="name" class="form-control" value="@Model.Name" required />
+    </div>
+    <a asp-page="Index" asp-route-companyId="@Model.CompanyId" class="btn btn-secondary">Bekor qilish</a>
+    <button type="submit" class="btn btn-primary">Saqlash</button>
+</form>

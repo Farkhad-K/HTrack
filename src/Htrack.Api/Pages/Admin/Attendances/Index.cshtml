@@ -1,0 +1,76 @@
+@page
+@model HTrack.Api.Pages.Admin.Attendances.IndexModel
+@using HTrack.Api.Utilities
+@{
+    ViewData["Title"] = "Davomat";
+}
+
+<h4 class="mb-3">Davomat</h4>
+
+<form method="get" class="mb-4 d-flex gap-2 align-items-center" style="max-width:400px">
+    <select name="companyId" class="form-select" onchange="this.form.submit()">
+        <option value="">— Kompaniya tanlang —</option>
+        @foreach (var c in Model.Companies)
+        {
+            <option value="@c.Id" selected="@(c.Id == Model.SelectedCompanyId)">@c.Name</option>
+        }
+    </select>
+</form>
+
+@if (Model.SelectedCompanyId != Guid.Empty)
+{
+    <div class="row g-3">
+        <div class="col-12">
+            <h6 class="text-success">Hozir ishda (@Model.CheckedIn.Count kishi)</h6>
+            <table class="table table-sm table-bordered">
+                <thead class="table-success">
+                    <tr>
+                        <th>Xodim</th>
+                        <th>Kelish vaqti</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.CheckedIn.Count == 0)
+                    {
+                        <tr><td colspan="2" class="text-muted text-center">Hozir hech kim ishda emas</td></tr>
+                    }
+                    @foreach (var a in Model.CheckedIn)
+                    {
+                        <tr>
+                            <td>@(a?.Employee?.Name ?? "—")</td>
+                            <td>@(a?.CheckIn != null ? TimeHelper.ToUzbekistanTime(a.CheckIn).ToString("dd.MM.yyyy HH:mm") : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="col-12">
+            <h6 class="text-secondary">Bugun chiqib ketganlar (@Model.CheckedOut.Count kishi)</h6>
+            <table class="table table-sm table-bordered">
+                <thead class="table-secondary">
+                    <tr>
+                        <th>Xodim</th>
+                        <th>Kelish</th>
+                        <th>Ketish</th>
+                        <th>Davomiylik</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (Model.CheckedOut.Count == 0)
+                    {
+                        <tr><td colspan="4" class="text-muted text-center">Ma'lumot yo'q</td></tr>
+                    }
+                    @foreach (var a in Model.CheckedOut)
+                    {
+                        <tr>
+                            <td>@(a?.Employee?.Name ?? "—")</td>
+                            <td>@(a?.CheckIn != null ? TimeHelper.ToUzbekistanTime(a.CheckIn).ToString("HH:mm") : "—")</td>
+                            <td>@(a?.CheckOut != null ? TimeHelper.ToUzbekistanTime(a.CheckOut.Value).ToString("HH:mm") : "—")</td>
+                            <td>@(a?.Duration != null ? $"{(int)a.Duration.TotalHours:D2}:{a.Duration.Minutes:D2}" : "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}

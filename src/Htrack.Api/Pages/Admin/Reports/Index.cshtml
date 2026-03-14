@@ -1,0 +1,59 @@
+@page
+@model HTrack.Api.Pages.Admin.Reports.IndexModel
+@{
+    ViewData["Title"] = "Hisobotlar";
+}
+
+<h4 class="mb-3">Hisobotlar</h4>
+
+@if (Model.Error != null)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+<form method="post" asp-page-handler="Download">
+    <div class="mb-4" style="max-width:400px">
+        <label for="companyId" class="form-label fw-semibold">Kompaniya</label>
+        <select id="companyId" name="companyId" class="form-select" required>
+            <option value="">— Tanlang —</option>
+            @foreach (var c in Model.Companies)
+            {
+                <option value="@c.Id">@c.Name</option>
+            }
+        </select>
+    </div>
+
+    <input type="hidden" name="type" id="reportType" value="last30" />
+
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <button type="submit" class="btn btn-outline-primary"
+                onclick="document.getElementById('reportType').value='last30'">
+            O'tgan 30 kun
+        </button>
+        <button type="submit" class="btn btn-outline-primary"
+                onclick="document.getElementById('reportType').value='last15'">
+            O'tgan 15 kun
+        </button>
+        <button type="submit" class="btn btn-outline-primary"
+                onclick="document.getElementById('reportType').value='monthToDate'">
+            Bu oyning boshi
+        </button>
+    </div>
+
+    <hr />
+    <h6 class="mb-3">Maxsus sana oralig'i</h6>
+    <div class="d-flex flex-wrap gap-2 align-items-end">
+        <div>
+            <label for="from" class="form-label mb-1">Dan</label>
+            <input type="date" id="from" name="from" class="form-control" />
+        </div>
+        <div>
+            <label for="to" class="form-label mb-1">Gacha</label>
+            <input type="date" id="to" name="to" class="form-control" />
+        </div>
+        <button type="submit" class="btn btn-outline-secondary"
+                onclick="document.getElementById('reportType').value='custom'">
+            Yuklash
+        </button>
+    </div>
+</form>

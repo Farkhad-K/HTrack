@@ -1,0 +1,36 @@
+@page
+@model HTrack.Api.Pages.Admin.Employees.CreateModel
+@{
+    ViewData["Title"] = "Xodim qo'shish";
+}
+
+<h4 class="mb-3">Xodim qo'shish</h4>
+
+@if (Model.Error != null)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+<form method="post" style="max-width:500px">
+    <div class="mb-3">
+        <label for="companyId" class="form-label">Kompaniya</label>
+        <select id="companyId" name="companyId" class="form-select" required>
+            <option value="">— Tanlang —</option>
+            @foreach (var c in Model.Companies)
+            {
+                <option value="@c.Id" selected="@(c.Id.ToString() == Model.SelectedCompanyIdStr)">@c.Name</option>
+            }
+        </select>
+    </div>
+    <div class="mb-3">
+        <label for="name" class="form-label">Ismi</label>
+        <input type="text" id="name" name="name" class="form-control" value="@Model.NameValue" required />
+    </div>
+    <div class="mb-3">
+        <label for="rfid" class="form-label">RFID Card UID</label>
+        <input type="text" id="rfid" name="rfid" class="form-control" value="@Model.RfidValue" required
+               placeholder="AA BB CC DD" />
+    </div>
+    <a asp-page="Index" class="btn btn-secondary">Bekor qilish</a>
+    <button type="submit" class="btn btn-primary">Saqlash</button>
+</form>

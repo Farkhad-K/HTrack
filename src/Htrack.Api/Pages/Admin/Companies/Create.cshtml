@@ -1,0 +1,30 @@
+@page
+@model HTrack.Api.Pages.Admin.Companies.CreateModel
+@{
+    ViewData["Title"] = "Kompaniya qo'shish";
+}
+
+<h4 class="mb-3">Kompaniya qo'shish</h4>
+
+@if (Model.Error != null)
+{
+    <div class="alert alert-danger">@Model.Error</div>
+}
+
+<form method="post" style="max-width:500px">
+    <div class="mb-3">
+        <label for="name" class="form-label">Nomi</label>
+        <input type="text" id="name" name="name" class="form-control" required />
+    </div>
+    <div class="mb-3">
+        <label for="tgChatId" class="form-label">Telegram Chat ID</label>
+        <input type="number" id="tgChatId" name="tgChatId" class="form-control" required />
+    </div>
+    <div class="mb-3">
+        <label for="managerIds" class="form-label">Menejer Telegram ID lari (vergul bilan ajrating)</label>
+        <textarea id="managerIds" name="managerIds" class="form-control" rows="3"
+                  placeholder="123456789, 987654321"></textarea>
+    </div>
+    <a asp-page="Index" class="btn btn-secondary">Bekor qilish</a>
+    <button type="submit" class="btn btn-primary">Saqlash</button>
+</form>
