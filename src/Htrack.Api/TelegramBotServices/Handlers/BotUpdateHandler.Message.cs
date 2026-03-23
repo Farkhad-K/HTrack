@@ -1,5 +1,7 @@
 using HTrack.Api.Abstractions.RepositoriesAbstractions;
+using HTrack.Api.Abstractions.ServicesAbstractions;
 using HTrack.Api.Entities;
+using HTrack.Api.Exceptions;
 using HTrack.Api.Utilities;
 using Telegram.Bot;
 using Telegram.Bot.Types;
@@ -55,6 +57,7 @@ public partial class BotUpdateHandler
             var companiesRepository = services.GetRequiredService<ICompaniesRepository>();
             var employeesRepository = services.GetRequiredService<IEmployeesRepository>();
             var attendancesRepository = services.GetRequiredService<IAttendancesRepository>();
+            var attendancesService = services.GetRequiredService<IAttendancesService>();
             var reportService = services.GetRequiredService<IExcelReportService>();
 
             var companies = await companiesRepository.GetAllAsync(ct);
@@ -86,13 +89,7 @@ public partial class BotUpdateHandler
 
                     if (pendingCmd == "newAttendance")
                     {
-                        await HandleNewAttendancePending(botClient, message, userCompany, userId, text, attendancesRepository, ct);
-                        return;
-                    }
-
-                    if (pendingCmd == "awaitingRfidFor15Day")
-                    {
-                        await HandleAwaitingRfidFor15Day(botClient, message, userCompany, userId, text, reportService, ct);
+                        await HandleNewAttendancePending(botClient, message, userCompany, userId, text, attendancesService, ct);
                         return;
                     }
 
@@ -148,7 +145,7 @@ public partial class BotUpdateHandler
                     break;
 
                 case "/15daysreport":
-                    await Handle15DaysReportCommand(botClient, message, userCompany, userId, ct);
+                    await Handle15DaysReportCommand(botClient, message, userCompany, reportService, ct);
                     break;
 
                 case "/employee_monthly":
@@ -156,7 +153,11 @@ public partial class BotUpdateHandler
                     break;
 
                 case "/report_till_today":
-                    await HandleReportTillTodayCommand(botClient, message, userCompany, reportService, ct);
+                    await HandleReportTillTodayCommand(botClient, message, userCompany, userId, ct);
+                    break;
+
+                case "/company_report_till_today":
+                    await HandleCompanyReportTillTodayCommand(botClient, message, userCompany, reportService, ct);
                     break;
 
                 case "/custom_report":
@@ -259,7 +260,7 @@ public partial class BotUpdateHandler
 
     private async Task HandleNewAttendancePending(
         ITelegramBotClient botClient, Message message, Company? userCompany,
-        long userId, string text, IAttendancesRepository attendancesRepository, CancellationToken ct)
+        long userId, string text, IAttendancesService attendancesService, CancellationToken ct)
     {
         if (userCompany is null)
         {
@@ -271,48 +272,51 @@ public partial class BotUpdateHandler
         try
         {
             var rfidUid = text.Replace(" ", "").ToUpperInvariant();
-            var employee = await attendancesRepository.GetEmployeeByRfidAsync(userCompany.Id, rfidUid, ct);
+            var result = await attendancesService.HandleAttendanceWithResultAsync(userCompany.Id, rfidUid, AttendanceEntrySource.Manual, ct);
 
-            if (employee == null)
+            if (result.ActionType == AttendanceActionType.IgnoredDuplicate)
             {
-                retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
-                if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
-                {
-                    ClearUserPendingState(userId);
-                    await botClient.SendMessage(chatId: message.Chat.Id,
-                        text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
-                }
-                else
-                {
-                    await botClient.SendMessage(
-                        chatId: message.Chat.Id,
-                        text: $"❌ Ushbu RFID bo'yicha xodim topilmadi: `{rfidUid}`.",
-                        parseMode: ParseMode.Markdown,
-                        cancellationToken: ct);
-                }
-                return;
-            }
-
-            var lastAttendance = await attendancesRepository.GetLastAttendanceAsync(employee.Id, ct);
-
-            if (lastAttendance is null || lastAttendance.CheckOut != null)
-            {
-                await attendancesRepository.CheckInAsync(employee.Id, ct);
                 await botClient.SendMessage(
                     chatId: message.Chat.Id,
-                    text: $"✅ *{employee.Name}* ishga keldi (RFID: `{employee.RFIDCardUID}`)",
+                    text: $"⏱️ *{result.Employee.Name}* uchun takroriy scan e'tiborga olinmadi.\n{result.Message}",
+                    parseMode: ParseMode.Markdown,
+                    cancellationToken: ct);
+            }
+            else if (result.ActionType == AttendanceActionType.CheckedIn)
+            {
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: $"✅ *{result.Employee.Name}* ishga keldi (RFID: `{result.Employee.RFIDCardUID}`)",
                     parseMode: ParseMode.Markdown,
                     cancellationToken: ct);
             }
             else
             {
-                await attendancesRepository.CheckOutAsync(lastAttendance, ct);
                 await botClient.SendMessage(
                     chatId: message.Chat.Id,
-                    text: $"✅ *{employee.Name}* ishni tugatdi (RFID: `{employee.RFIDCardUID}`)",
+                    text: $"✅ *{result.Employee.Name}* ishni tugatdi (RFID: `{result.Employee.RFIDCardUID}`)",
                     parseMode: ParseMode.Markdown,
                     cancellationToken: ct);
             }
+        }
+        catch (EmployeeWithUIDNotFoundException)
+        {
+            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
+            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
+            {
+                ClearUserPendingState(userId);
+                await botClient.SendMessage(chatId: message.Chat.Id,
+                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
+            }
+            else
+            {
+                await botClient.SendMessage(
+                    chatId: message.Chat.Id,
+                    text: $"❌ Ushbu RFID bo'yicha xodim topilmadi: `{text.Replace(" ", "").ToUpperInvariant()}`.",
+                    parseMode: ParseMode.Markdown,
+                    cancellationToken: ct);
+            }
+            return;
         }
         catch (Exception ex)
         {

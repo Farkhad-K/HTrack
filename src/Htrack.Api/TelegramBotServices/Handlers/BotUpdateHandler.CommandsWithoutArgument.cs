@@ -31,8 +31,9 @@ public partial class BotUpdateHandler
             "Quyidagi tugmalar yoki buyruqlardan foydalanishingiz mumkin:\n\n" +
             "🔹 */employees* - Barcha xodimlar va ularning RFID kodlari ro'yxati\n" +
             "🔹 */excel_report* - O'tgan oy uchun Excel hisobotini yuklab olish\n" +
-            "🔹 */15daysreport* - So'nggi 15 kunlik hisobotni yuklab olish\n" +
-            "🔹 */report_till_today* - Oy boshidan bugungacha hisobot\n" +
+            "🔹 */15daysreport* - Joriy 15 kunlik kompaniya hisobotini yuklab olish\n" +
+            "🔹 */report_till_today* - Xodimning oy boshidan bugungacha hisobotini olish\n" +
+            "🔹 */company_report_till_today* - Kompaniya uchun oy boshidan bugungacha hisobot\n" +
             "🔹 */custom_report* - Ixtiyoriy sana oralig'i hisoboti\n" +
             "🔹 */new_attendance* - RFID orqali xodimni qo'lda ro'yxatdan o'tkazish\n" +
             "🔹 */update_employee* - Xodim ismini RFID orqali yangilash\n" +
@@ -87,18 +88,20 @@ public partial class BotUpdateHandler
             cancellationToken: ct);
     }
 
-    private async Task Handle15DaysReportCommand(
+    private static async Task Handle15DaysReportCommand(
         ITelegramBotClient botClient, Message message,
-        Company? userCompany, long userId, CancellationToken ct)
+        Company? userCompany,
+        IExcelReportService reportService, CancellationToken ct)
     {
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
 
-        pendingCommands[userId] = "awaitingRfidFor15Day";
+        var (stream, fileName) = await reportService.Get15DayReportAsync(userCompany!.Id, ct);
 
-        await botClient.SendMessage(
+        await botClient.SendDocument(
             chatId: message.Chat.Id,
-            text: "📅 Xodimning RFID kodini kiriting:",
+            document: new InputFileStream(stream, fileName),
+            caption: $"📅 {userCompany.Name} kompaniyasining joriy 15 kunlik batafsil davomat hisoboti",
             cancellationToken: ct);
     }
 
@@ -117,7 +120,23 @@ public partial class BotUpdateHandler
             cancellationToken: ct);
     }
 
-    private static async Task HandleReportTillTodayCommand(
+    private async Task HandleReportTillTodayCommand(
+        ITelegramBotClient botClient, Message message,
+        Company? userCompany,
+        long userId, CancellationToken ct)
+    {
+        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
+            return;
+
+        pendingCommands[userId] = "awaitingRfidForMonthToDate";
+
+        await botClient.SendMessage(
+            chatId: message.Chat.Id,
+            text: "📆 Xodimning RFID kodini kiriting:",
+            cancellationToken: ct);
+    }
+
+    private static async Task HandleCompanyReportTillTodayCommand(
         ITelegramBotClient botClient, Message message,
         Company? userCompany,
         IExcelReportService reportService, CancellationToken ct)
@@ -130,7 +149,7 @@ public partial class BotUpdateHandler
         await botClient.SendDocument(
             chatId: message.Chat.Id,
             document: new InputFileStream(stream, fileName),
-            caption: $"📆 {userCompany.Name} kompaniyasi uchun oy boshidan bugungacha davomat hisoboti",
+            caption: $"📆 {userCompany.Name} kompaniyasi uchun oy boshidan bugungacha batafsil davomat hisoboti",
             cancellationToken: ct);
     }
 

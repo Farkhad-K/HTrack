@@ -24,13 +24,14 @@ public class AttendancesRepository(
             .OrderByDescending(a => a.CheckIn)
             .FirstOrDefaultAsync(cancellationToken);
 
-    public async ValueTask<Attendance?> CheckInAsync(Guid employeeId, CancellationToken cancellationToken = default)
+    public async ValueTask<Attendance?> CheckInAsync(Guid employeeId, AttendanceEntrySource source = AttendanceEntrySource.Device, CancellationToken cancellationToken = default)
     {
         var attendance = new Attendance
         {
             Id = Guid.NewGuid(),
             EmployeeId = employeeId,
-            CheckIn = DateTime.UtcNow
+            CheckIn = DateTime.UtcNow,
+            CheckInSource = source
         };
 
         var entry = context.Attendances.Add(attendance);
@@ -41,10 +42,11 @@ public class AttendancesRepository(
         return entry.Entity;
     }
 
-    public async ValueTask<Attendance?> CheckOutAsync(Attendance attendance, CancellationToken cancellationToken = default)
+    public async ValueTask<Attendance?> CheckOutAsync(Attendance attendance, AttendanceEntrySource source = AttendanceEntrySource.Device, CancellationToken cancellationToken = default)
     {
         attendance.CheckOut = DateTime.UtcNow;
         attendance.Duration = attendance.CheckOut.Value - attendance.CheckIn;
+        attendance.CheckOutSource = source;
 
         context.Attendances.Update(attendance);
         await context.SaveChangesAsync(cancellationToken);

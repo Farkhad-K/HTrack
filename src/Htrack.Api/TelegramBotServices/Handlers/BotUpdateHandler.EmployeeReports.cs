@@ -8,46 +8,6 @@ namespace HTrack.Api.TelegramBotServices;
 
 public partial class BotUpdateHandler
 {
-    private async Task HandleAwaitingRfidFor15Day(
-        ITelegramBotClient botClient, Message message,
-        Company? userCompany, long userId, string text,
-        IExcelReportService reportService, CancellationToken ct)
-    {
-        if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
-        {
-            ClearUserPendingState(userId);
-            return;
-        }
-
-        var rfidUid = NormaliseRfid(text);
-        try
-        {
-            var (stream, fileName) = await reportService.GetEmployee15DayReportAsync(userCompany!.Id, rfidUid, ct);
-            ClearUserPendingState(userId);
-            await botClient.SendDocument(
-                chatId: message.Chat.Id,
-                document: new InputFileStream(stream, fileName),
-                caption: "📅 15 kunlik xodim davomat hisoboti",
-                cancellationToken: ct);
-        }
-        catch
-        {
-            retryCounters.AddOrUpdate(userId, 1, (_, c) => c + 1);
-            if (retryCounters.TryGetValue(userId, out var attempts) && attempts >= 3)
-            {
-                ClearUserPendingState(userId);
-                await botClient.SendMessage(chatId: message.Chat.Id,
-                    text: "❌ 3 marta xato kiritdingiz. Buyruqni qaytadan boshlang.", cancellationToken: ct);
-            }
-            else
-            {
-                await botClient.SendMessage(chatId: message.Chat.Id,
-                    text: $"❌ Ushbu RFID bo'yicha xodim topilmadi: `{rfidUid}`. Qaytadan kiriting.",
-                    parseMode: ParseMode.Markdown, cancellationToken: ct);
-            }
-        }
-    }
-
     private async Task HandleAwaitingRfidForMonthToDate(
         ITelegramBotClient botClient, Message message,
         Company? userCompany, long userId, string text,

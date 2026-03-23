@@ -10,20 +10,63 @@ public class AttendancesService(
     IAttendancesRepository attendancesRepository,
     ILogger<AttendancesService> logger) : IAttendancesService
 {
+    private static readonly TimeSpan DuplicateScanWindow = TimeSpan.FromSeconds(10);
+
     public async ValueTask<Attendance?> HandleAttendanceAsync(Guid companyId, string rfidCardUID, CancellationToken cancellationToken = default)
+        => (await HandleAttendanceWithResultAsync(companyId, rfidCardUID, AttendanceEntrySource.Device, cancellationToken)).Attendance;
+
+    public async ValueTask<Attendance?> HandleAttendanceAsync(Guid companyId, string rfidCardUID, AttendanceEntrySource source, CancellationToken cancellationToken = default)
+        => (await HandleAttendanceWithResultAsync(companyId, rfidCardUID, source, cancellationToken)).Attendance;
+
+    public async ValueTask<AttendanceActionResult> HandleAttendanceWithResultAsync(Guid companyId, string rfidCardUID, CancellationToken cancellationToken = default)
+        => await HandleAttendanceWithResultAsync(companyId, rfidCardUID, AttendanceEntrySource.Device, cancellationToken);
+
+    public async ValueTask<AttendanceActionResult> HandleAttendanceWithResultAsync(Guid companyId, string rfidCardUID, AttendanceEntrySource source, CancellationToken cancellationToken = default)
     {
         var employee = await attendancesRepository.GetEmployeeByRfidAsync(companyId, rfidCardUID, cancellationToken);
         var lastAttendance = await attendancesRepository.GetLastAttendanceAsync(employee!.Id, cancellationToken);
+        var nowUtc = DateTime.UtcNow;
 
         if (lastAttendance == null || lastAttendance.CheckOut != null)
         {
+            if (lastAttendance?.CheckOut is DateTime lastCheckOut
+                && nowUtc - lastCheckOut < DuplicateScanWindow)
+            {
+                logger.LogWarning(
+                    "Duplicate scan ignored for employee {EmployeeId} within {WindowSeconds}s after check-out",
+                    employee.Id,
+                    DuplicateScanWindow.TotalSeconds);
+                return new AttendanceActionResult(
+                    lastAttendance,
+                    employee,
+                    AttendanceActionType.IgnoredDuplicate,
+                    source,
+                    $"Takroriy scan {DuplicateScanWindow.TotalSeconds:0} soniya ichida e'tiborga olinmadi.");
+            }
+
             logger.LogInformation("Check-in for employee {EmployeeId}", employee.Id);
-            return await attendancesRepository.CheckInAsync(employee.Id, cancellationToken);
+            var attendance = await attendancesRepository.CheckInAsync(employee.Id, source, cancellationToken);
+            return new AttendanceActionResult(attendance!, employee, AttendanceActionType.CheckedIn, source);
         }
         else
         {
+            if (nowUtc - lastAttendance.CheckIn < DuplicateScanWindow)
+            {
+                logger.LogWarning(
+                    "Duplicate scan ignored for employee {EmployeeId} within {WindowSeconds}s after check-in",
+                    employee.Id,
+                    DuplicateScanWindow.TotalSeconds);
+                return new AttendanceActionResult(
+                    lastAttendance,
+                    employee,
+                    AttendanceActionType.IgnoredDuplicate,
+                    source,
+                    $"Takroriy scan {DuplicateScanWindow.TotalSeconds:0} soniya ichida e'tiborga olinmadi.");
+            }
+
             logger.LogInformation("Check-out for employee {EmployeeId}", employee.Id);
-            return await attendancesRepository.CheckOutAsync(lastAttendance, cancellationToken);
+            var attendance = await attendancesRepository.CheckOutAsync(lastAttendance, source, cancellationToken);
+            return new AttendanceActionResult(attendance!, employee, AttendanceActionType.CheckedOut, source);
         }
     }
 

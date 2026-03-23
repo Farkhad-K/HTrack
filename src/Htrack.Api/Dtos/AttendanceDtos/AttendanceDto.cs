@@ -6,6 +6,8 @@ public class AttendanceDto
     public DateTime CkeckIn { get; set; }
     public DateTime? CheckOut { get; set; }
     public TimeSpan Duration { get; set; }
+    public string? CheckInSource { get; set; }
+    public string? CheckOutSource { get; set; }
 
     public Guid EmployeeId { get; set; }
     public string? EmployeeName { get; set; }

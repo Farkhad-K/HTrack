@@ -20,6 +20,13 @@ public class AttendanceConfigurations : IEntityTypeConfiguration<Attendance>
         builder.Property(x => x.Duration)
             .HasColumnType("interval"); // PostgreSQL-specific type for TimeSpan
 
+        builder.Property(x => x.CheckInSource)
+            .HasConversion<int>()
+            .HasDefaultValue(AttendanceEntrySource.Device);
+
+        builder.Property(x => x.CheckOutSource)
+            .HasConversion<int>();
+
         builder.HasOne(x => x.Employee)
             .WithMany(e => e.Attendances)
             .HasForeignKey(x => x.EmployeeId)

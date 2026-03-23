@@ -1,6 +1,7 @@
 using System.Globalization;
 using ClosedXML.Excel;
 using HTrack.Api.Data;
+using HTrack.Api.Entities;
 using HTrack.Api.Utilities;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,7 +11,15 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
 {
     private readonly CultureInfo _uzCulture = new("uz-UZ");
 
-    private record AttendanceRow(string EmployeeName, string RFID, DateTime CheckIn, DateTime? CheckOut, TimeSpan Duration);
+    private record AttendanceRow(
+        Guid EmployeeId,
+        string EmployeeName,
+        string RFID,
+        DateTime CheckIn,
+        DateTime? CheckOut,
+        TimeSpan Duration,
+        AttendanceEntrySource CheckInSource,
+        AttendanceEntrySource? CheckOutSource);
 
     // ── Company-wide reports ────────────────────────────────────────────────
 
@@ -19,11 +28,11 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId, ct)
             ?? throw new InvalidOperationException($"Company {companyId} not found.");
 
-        var reportDate = DateTime.UtcNow.AddMonths(-1);
-        var rows = await QueryAttendances(companyId,
-            a => a.CheckIn.Month == reportDate.Month && a.CheckIn.Year == reportDate.Year, ct);
+        var reportDate = GetBusinessToday().AddMonths(-1);
+        var (from, to) = GetFullMonthRange(reportDate);
+        var rows = await QueryAttendances(companyId, from, to, ct);
 
-        var monthName = reportDate.ToString("MMMM", _uzCulture);
+        var monthName = reportDate.ToDateTime(TimeOnly.MinValue).ToString("MMMM", _uzCulture);
         var label = $"{monthName} {reportDate.Year}";
         var fileName = $"{company.Name!}_{monthName}_{reportDate.Year}_davomat.xlsx";
 
@@ -35,18 +44,14 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId, ct)
             ?? throw new InvalidOperationException($"Company {companyId} not found.");
 
-        var now = DateTime.UtcNow;
-        var startDay = now.Day <= 15 ? 1 : 16;
-        var endDay = now.Day <= 15 ? 15 : DateTime.DaysInMonth(now.Year, now.Month);
-        var periodName = startDay == 1 ? "1-15" : "16-oy oxiri";
+        var today = GetBusinessToday();
+        var (from, to) = GetCurrentHalfMonthRange(today);
+        var periodName = from.Day == 1 ? "1-15" : "16-oy oxiri";
+        var rows = await QueryAttendances(companyId, from, to, ct);
 
-        var rows = await QueryAttendances(companyId,
-            a => a.CheckIn.Month == now.Month && a.CheckIn.Year == now.Year
-              && a.CheckIn.Day >= startDay && a.CheckIn.Day <= endDay, ct);
-
-        var monthName = now.ToString("MMMM", _uzCulture);
-        var label = $"{monthName} {now.Year} ({periodName})";
-        var fileName = $"{company.Name!}_{monthName}_{now.Year}_davomat_{startDay}dan{endDay}.xlsx";
+        var monthName = today.ToDateTime(TimeOnly.MinValue).ToString("MMMM", _uzCulture);
+        var label = $"{monthName} {today.Year} ({periodName})";
+        var fileName = $"{company.Name!}_{monthName}_{today.Year}_davomat_{from.Day}dan{to.Day}.xlsx";
 
         return BuildReport(rows, company.Name!, label, fileName);
     }
@@ -56,14 +61,13 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId, ct)
             ?? throw new InvalidOperationException($"Company {companyId} not found.");
 
-        var now = DateTime.UtcNow;
-        var rows = await QueryAttendances(companyId,
-            a => a.CheckIn.Month == now.Month && a.CheckIn.Year == now.Year
-              && a.CheckIn.Day >= 1 && a.CheckIn.Day <= now.Day, ct);
+        var today = GetBusinessToday();
+        var (from, to) = GetMonthToDateRange(today);
+        var rows = await QueryAttendances(companyId, from, to, ct);
 
-        var monthName = now.ToString("MMMM", _uzCulture);
-        var label = $"{monthName} {now.Year} (1-{now.Day})";
-        var fileName = $"{company.Name!}_{monthName}_{now.Year}_davomat_1dan{now.Day}.xlsx";
+        var monthName = today.ToDateTime(TimeOnly.MinValue).ToString("MMMM", _uzCulture);
+        var label = $"{monthName} {today.Year} (1-{today.Day})";
+        var fileName = $"{company.Name!}_{monthName}_{today.Year}_davomat_1dan{today.Day}.xlsx";
 
         return BuildReport(rows, company.Name!, label, fileName);
     }
@@ -73,11 +77,7 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         var company = await context.Companies.FirstOrDefaultAsync(c => c.Id == companyId, ct)
             ?? throw new InvalidOperationException($"Company {companyId} not found.");
 
-        var fromUtc = from.ToDateTime(TimeOnly.MinValue, DateTimeKind.Utc);
-        var toUtc = to.ToDateTime(TimeOnly.MaxValue, DateTimeKind.Utc);
-
-        var rows = await QueryAttendances(companyId,
-            a => a.CheckIn >= fromUtc && a.CheckIn <= toUtc, ct);
+        var rows = await QueryAttendances(companyId, from, to, ct);
 
         var label = $"{from:dd.MM.yyyy} – {to:dd.MM.yyyy}";
         var fileName = $"{company.Name!}_davomat_{from:yyyyMMdd}_{to:yyyyMMdd}.xlsx";
@@ -98,18 +98,21 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
             .Select(a => new
             {
                 EmployeeName = a.Employee!.Name,
+                EmployeeId = a.EmployeeId,
                 RFID = a.Employee.RFIDCardUID,
                 a.CheckIn,
                 a.CheckOut,
-                a.Duration
+                a.Duration,
+                a.CheckInSource,
+                a.CheckOutSource
             })
             .OrderBy(a => a.EmployeeName)
             .ThenBy(a => a.CheckIn)
             .ToListAsync(ct);
 
         return raw
-            .DistinctBy(a => new { a.EmployeeName, a.CheckIn, a.CheckOut })
-            .Select(a => new AttendanceRow(a.EmployeeName!, a.RFID!, a.CheckIn, a.CheckOut, a.Duration))
+            .DistinctBy(a => new { a.EmployeeId, a.CheckIn, a.CheckOut, a.CheckInSource, a.CheckOutSource })
+            .Select(a => new AttendanceRow(a.EmployeeId, a.EmployeeName!, a.RFID!, a.CheckIn, a.CheckOut, a.Duration, a.CheckInSource, a.CheckOutSource))
             .ToList();
     }
 
@@ -124,17 +127,20 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
             .Select(a => new
             {
                 EmployeeName = a.Employee!.Name,
+                EmployeeId = a.EmployeeId,
                 RFID = a.Employee.RFIDCardUID,
                 a.CheckIn,
                 a.CheckOut,
-                a.Duration
+                a.Duration,
+                a.CheckInSource,
+                a.CheckOutSource
             })
             .OrderBy(a => a.CheckIn)
             .ToListAsync(ct);
 
         return raw
-            .DistinctBy(a => new { a.CheckIn, a.CheckOut })
-            .Select(a => new AttendanceRow(a.EmployeeName!, a.RFID!, a.CheckIn, a.CheckOut, a.Duration))
+            .DistinctBy(a => new { a.EmployeeId, a.CheckIn, a.CheckOut, a.CheckInSource, a.CheckOutSource })
+            .Select(a => new AttendanceRow(a.EmployeeId, a.EmployeeName!, a.RFID!, a.CheckIn, a.CheckOut, a.Duration, a.CheckInSource, a.CheckOutSource))
             .ToList();
     }
 
@@ -161,7 +167,7 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         var ws = workbook.Worksheets.Add("Xulosa");
 
         ws.Cell(1, 1).Value = $"{companyName} — {label}";
-        ws.Range(1, 1, 1, 4).Merge();
+        ws.Range(1, 1, 1, 6).Merge();
         ws.Cell(1, 1).Style.Font.Bold = true;
         ws.Cell(1, 1).Style.Font.FontSize = 13;
         ws.Cell(1, 1).Style.Alignment.Horizontal = XLAlignmentHorizontalValues.Center;
@@ -170,33 +176,41 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         ws.Cell(2, 2).Value = "Kunlar soni";
         ws.Cell(2, 3).Value = "Jami soat";
         ws.Cell(2, 4).Value = "O'rtacha soat/kun";
+        ws.Cell(2, 5).Value = "Anomaliya";
+        ws.Cell(2, 6).Value = "Qo'lda";
 
-        var headerRange = ws.Range(2, 1, 2, 4);
+        var headerRange = ws.Range(2, 1, 2, 6);
         headerRange.Style.Font.Bold = true;
         headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
 
         ws.SheetView.FreezeRows(2);
 
         int row = 3;
-        var grouped = rows.GroupBy(r => r.EmployeeName);
+        var grouped = rows.GroupBy(r => new { r.EmployeeId, r.EmployeeName });
 
         foreach (var group in grouped)
         {
             var totalDuration = group.Aggregate(TimeSpan.Zero, (acc, r) => acc + r.Duration);
-            var distinctDays = group.Select(r => r.CheckIn.Date).Distinct().Count();
+            var distinctDays = group.Select(r => GetBusinessDate(r.CheckIn)).Distinct().Count();
             var avgHours = distinctDays > 0 ? totalDuration.TotalHours / distinctDays : 0;
+            var anomalyCount = group.Count(HasAnomaly);
+            var manualCount = group.Count(HasManualEntry);
 
-            ws.Cell(row, 1).Value = group.Key;
+            ws.Cell(row, 1).Value = group.Key.EmployeeName;
             ws.Cell(row, 2).Value = distinctDays;
-            ws.Cell(row, 3).Value = $"{(int)totalDuration.TotalHours:D2}:{totalDuration.Minutes:D2}";
+            ws.Cell(row, 3).Value = FormatDuration(totalDuration);
             ws.Cell(row, 4).Value = $"{avgHours:F1}";
+            ws.Cell(row, 5).Value = anomalyCount;
+            ws.Cell(row, 6).Value = manualCount;
             row++;
         }
 
+        row = AppendManualSummarySection(ws, rows, row);
+
         ws.Columns().AdjustToContents();
         int lastRow = row - 1; // last data row (or row 2 if no groups)
-        ws.Range(1, 1, lastRow, 4).Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
-        ws.Range(1, 1, lastRow, 4).Style.Border.InsideBorder = XLBorderStyleValues.Medium;
+        ws.Range(1, 1, lastRow, 6).Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+        ws.Range(1, 1, lastRow, 6).Style.Border.InsideBorder = XLBorderStyleValues.Medium;
     }
 
     private void BuildDetailSheet(XLWorkbook workbook, List<AttendanceRow> rows)
@@ -207,8 +221,10 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         ws.Cell(1, 2).Value = "Kelgan vaqti";
         ws.Cell(1, 3).Value = "Ketgan vaqti";
         ws.Cell(1, 4).Value = "Ishlagan soati";
+        ws.Cell(1, 5).Value = "Holat";
+        ws.Cell(1, 6).Value = "Manba";
 
-        var headerRange = ws.Range(1, 1, 1, 4);
+        var headerRange = ws.Range(1, 1, 1, 6);
         headerRange.Style.Font.Bold = true;
         headerRange.Style.Fill.BackgroundColor = XLColor.LightBlue;
 
@@ -216,7 +232,7 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
 
         int row = 2;
         int lastRow = 1;
-        var grouped = rows.GroupBy(r => r.EmployeeName);
+        var grouped = rows.GroupBy(r => new { r.EmployeeId, r.EmployeeName });
 
         foreach (var group in grouped)
         {
@@ -227,11 +243,15 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
             {
                 var checkIn = TimeHelper.ToUzbekistanTime(a.CheckIn);
                 var checkOut = a.CheckOut.HasValue ? TimeHelper.ToUzbekistanTime(a.CheckOut.Value) : (DateTime?)null;
+                var anomalyLabel = GetAnomalyLabel(a);
+                var sourceLabel = GetSourceLabel(a);
 
                 ws.Cell(row, 1).Value = isFirstRow ? $"{a.EmployeeName} - {a.RFID}" : "";
                 ws.Cell(row, 2).Value = checkIn.ToString("d-MMMM yyyy HH:mm", _uzCulture);
                 ws.Cell(row, 3).Value = checkOut?.ToString("d-MMMM yyyy HH:mm", _uzCulture) ?? "Yo'q";
-                ws.Cell(row, 4).Value = a.Duration.ToString(@"hh\:mm");
+                ws.Cell(row, 4).Value = FormatDuration(a.Duration);
+                ws.Cell(row, 5).Value = anomalyLabel ?? "";
+                ws.Cell(row, 6).Value = sourceLabel ?? "";
 
                 // Conditional row color based on duration
                 if (a.Duration < TimeSpan.FromHours(4))
@@ -239,7 +259,19 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
                 else if (a.Duration >= TimeSpan.FromHours(8))
                     ws.Range(row, 1, row, 4).Style.Fill.BackgroundColor = XLColor.FromHtml("#E0FFE0");
 
-                // First row of each employee group: green separator across all 4 columns
+                if (anomalyLabel is not null)
+                {
+                    ws.Cell(row, 5).Style.Fill.BackgroundColor = XLColor.FromHtml("#FFD8A8");
+                    ws.Cell(row, 5).Style.Font.Bold = true;
+                }
+
+                if (sourceLabel is not null)
+                {
+                    ws.Cell(row, 6).Style.Fill.BackgroundColor = XLColor.FromHtml("#D9EAF7");
+                    ws.Cell(row, 6).Style.Font.Bold = true;
+                }
+
+                // First row of each employee group: separator across employee/time columns
                 if (isFirstRow)
                     ws.Range(row, 1, row, 4).Style.Fill.BackgroundColor = XLColor.LightGreen;
 
@@ -249,8 +281,8 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
             }
 
             ws.Cell(row, 3).Value = "Jami";
-            ws.Cell(row, 4).Value = $"{(int)totalDuration.TotalHours:D2}:{totalDuration.Minutes:D2}";
-            ws.Range(row, 1, row, 4).Style.Font.Bold = true;
+            ws.Cell(row, 4).Value = FormatDuration(totalDuration);
+            ws.Range(row, 1, row, 6).Style.Font.Bold = true;
             ws.Cell(row, 3).Style.Fill.BackgroundColor = XLColor.LightYellow;
             ws.Cell(row, 4).Style.Fill.BackgroundColor = XLColor.Yellow;
 
@@ -259,8 +291,8 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         }
 
         ws.Columns().AdjustToContents();
-        ws.Range(1, 1, lastRow, 4).Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
-        ws.Range(1, 1, lastRow, 4).Style.Border.InsideBorder = XLBorderStyleValues.Medium;
+        ws.Range(1, 1, lastRow, 6).Style.Border.OutsideBorder = XLBorderStyleValues.Medium;
+        ws.Range(1, 1, lastRow, 6).Style.Border.InsideBorder = XLBorderStyleValues.Medium;
     }
 
 }

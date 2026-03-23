@@ -24,9 +24,9 @@ Botni ochganda pastda doimiy tugmalar paneli ko'rinadi:
 | ✅ Ishda | Hozir ishda bo'lgan xodimlar |
 | 🚪 Ishdan chiqdi | Bugun ishni tugatgan xodimlar |
 | 📊 O'tgan oy | O'tgan oy uchun kompaniya Excel hisoboti |
-| 📆 Bugunga | Oy boshidan bugunga qadar kompaniya hisoboti |
+| 📆 Bugunga | Bitta xodimning oy boshidan bugungacha batafsil hisoboti |
 | 📋 Xodim oylik | Bitta xodimning oy boshidan bugunga hisoboti |
-| 📅 15 kunlik | Bitta xodimning joriy 15 kunlik hisoboti |
+| 📅 15 kunlik | Kompaniyadagi barcha xodimlarning joriy 15 kunlik batafsil hisoboti |
 | 🗓 Ixtiyoriy sana | Bitta xodimning o'zingiz belgilagan sana hisoboti |
 | ✏️ Davomat | Qo'lda davomat kiritish (RFID orqali) |
 | 🔄 Yangilash | Xodim ismini RFID orqali yangilash |
@@ -85,33 +85,42 @@ Bugun ish vaqtini yakunlagan xodimlar ro'yxati.
 O'tgan kalendar oyi uchun kompaniyadagi barcha xodimlarning Excel fayli yuboriladi.
 
 Fayl ikki varaqdan iborat:
-- **Xulosa** — har bir xodim uchun ish kunlari soni, jami soat, o'rtacha soat/kun
-- **Batafsil** — har bir kelish-ketish yozuvi (sana, vaqt, davomiylik)
+- **Xulosa** — har bir xodim uchun ish kunlari soni, jami soat, o'rtacha soat/kun, anomaliya soni, qo'lda yozuvlar soni
+- **Batafsil** — har bir kelish-ketish yozuvi (sana, vaqt, davomiylik, holat, manba)
 
 ---
 
-### `/report_till_today` — Oy boshidan bugunga kompaniya hisoboti
+### `/report_till_today` — Xodimning oy boshidan bugungacha hisoboti
+
+Joriy oyning 1-kunidan bugungi sanagacha **bitta xodim** davomatini Excel formatida beradi.
+
+**Qadamlar:**
+
+1. `/report_till_today` yuboring yoki `📆 Bugunga` tugmasini bosing
+2. Bot RFID kodni so'raydi:
+   ```
+   📆 Xodimning RFID kodini kiriting:
+   ```
+3. RFID kodni yuboring
+4. Bot xodimning shaxsiy Excel faylini yuboradi.
+
+---
+
+### `/company_report_till_today` — Oy boshidan bugunga kompaniya hisoboti
 
 Joriy oyning 1-kunidan bugungi sanagacha bo'lgan barcha xodimlar davomatini o'z ichiga oladi.
 
 ---
 
-### `/15daysreport` — Xodimning 15 kunlik hisoboti
+### `/15daysreport` — Kompaniyaning 15 kunlik hisoboti
 
-Joriy oyning birinchi yoki ikkinchi yarmini avtomatik aniqlaydi va **bitta xodim** uchun hisobot beradi.
+Joriy oyning birinchi yoki ikkinchi yarmini avtomatik aniqlaydi va **kompaniyadagi barcha xodimlar** uchun batafsil hisobot beradi.
 
 **Qadamlar:**
 
 1. `/15daysreport` yuboring yoki `📅 15 kunlik` tugmasini bosing
-2. Bot RFID kodni so'raydi:
-   ```
-   📅 Xodimning RFID kodini kiriting:
-   ```
-3. RFID kodni yuboring:
-   ```
-   ABCDEF01
-   ```
-4. Bot xodimning shaxsiy Excel faylini yuboradi.
+2. Bot darhol Excel faylni yuboradi.
+3. Faylda barcha xodimlarning batafsil davomat yozuvlari bo'ladi: qaysi kuni, nechida kelgani, nechida ketgani va qancha ishlagani.
 
 **Qaysi davr hisoblanadi?**
 - Oy 1–15 kunlari ichida bo'lsangiz → 1-15-kun oralig'i
@@ -193,6 +202,8 @@ RFID skaner ishlamagan yoki xodim kartasiz kelgan holatlarda qo'lda check-in/che
    - Xodim hali check-in qilmagan bo'lsa → **kelish vaqti** belgilanadi
    - Xodim allaqachon check-in qilgan bo'lsa → **ketish vaqti** belgilanadi va davomiylik hisoblanadi
 
+> **Takroriy scan himoyasi:** bir xil RFID juda qisqa vaqt ichida qayta yuborilsa, tizim uni takroriy scan deb e'tiborsiz qoldirishi mumkin. Bu tasodifiy ikki marta bosish oqibatida noto'g'ri kelish/ketish yozuvi paydo bo'lishining oldini oladi.
+
 ---
 
 ### `/update_employee` — Xodim ismini yangilash
@@ -224,6 +235,8 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 | 🟢 Yashil fon | Xodim 8 soat va undan ko'p ishlagan |
 | 🔴 Qizil fon | Xodim 4 soatdan kam ishlagan |
 | Rangsiz | 4–8 soat oralig'ida ishlagan yoki hali ishdan chiqmagan |
+| 🟧 To'q sariq — "Holat" katagi | Shubhali yozuv: uzoq smena yoki vaqt/davomiylik nomuvofiqligi |
+| 🟦 Ko'kimtir — "Manba" katagi | Qo'lda kelish yoki qo'lda ketish mavjud |
 | 🟩 To'q yashil — birinchi qator | Kompaniya hisobotida har bir xodimning ajratuvchi qatori |
 | 🟨 Och sariq — "Kun jami" qatori | Xodim hisobotida har kunning yig'indi soati |
 | 🟡 Sariq — "Jami" qatori | Butun davr uchun umumiy jami ishlagan soat |
@@ -232,20 +245,24 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 
 ## Xodim hisobot varaqlarining tuzilishi
 
-**Xulosa varaqi** — bir qator: xodim ismi, ish kunlari soni, jami soat, o'rtacha soat/kun.
+**Xulosa varaqi** — bir qator: xodim ismi, ish kunlari soni, jami soat, o'rtacha soat/kun, anomaliya soni, qo'lda yozuvlar soni.
+
+Agar qo'lda yozuvlar bo'lsa, shu varaqning pastida **"Qo'lda yozuvlar"** bo'limi ham chiqadi.
 
 **Batafsil varaqi** — har bir kelish-ketish alohida qatorda, kunlar bo'yicha guruhlangan:
 
-| Kelish | Ketish | Smena soati | Kun jami |
-|--------|--------|-------------|----------|
-| 14.03.2025 08:45 | 14.03.2025 17:30 | 08:45 | |
-| 14.03.2025 — Kun jami | | | 08:45 |
-| 15.03.2025 09:00 | — | 00:00 | |
-| 15.03.2025 — Kun jami | | | 00:00 |
-| Jami | | | 08:45 |
+| Kelish | Ketish | Smena soati | Kun jami | Holat | Manba |
+|--------|--------|-------------|----------|-------|-------|
+| 14.03.2025 08:45 | 14.03.2025 17:30 | 08:45 | | | Qo'lda kelish |
+| 14.03.2025 — Kun jami | | | 08:45 | | |
+| 15.03.2025 09:00 | — | 00:00 | | | Qo'lda kelish |
+| 15.03.2025 — Kun jami | | | 00:00 | | |
+| Jami | | | 08:45 | | |
 
 - Har kunning oxirida **"Kun jami"** qatori (och sariq fonda) ko'rsatiladi
 - Eng oxirgi **"Jami"** qatori (sariq fonda) — butun davr yig'indisi
+- **"Holat"** ustuni shubhali yozuvlarni ko'rsatadi, lekin soatlar hisobini to'xtatmaydi
+- **"Manba"** ustuni qo'lda kiritilgan kelish/ketishlarni ko'rsatadi
 - Tungi smena uchun: kelish va ketish sanasi-vaqti to'liq ko'rsatiladi (masalan `31.03.2025 22:00` → `01.04.2025 06:00`)
 
 > **"Ketish" bo'sh (`—`) bo'lsa** — xodim hali ishdan chiqmagan yoki check-out qilinmagan. Rang ko'rsatilmaydi.
@@ -281,11 +298,17 @@ Xodimning ismi o'zgarganda RFID kodi orqali yangilash.
 **Savol:** Bir xodim bir kunda bir necha marta chiqib-kirsa?
 **Javob:** Har bir juft (kelish–ketish) alohida qatorda ko'rsatiladi. Kunning barcha smenalari tugagach, "Kun jami" qatori o'sha kunning umumiy soatini ko'rsatadi.
 
+**Savol:** Qo'lda kiritilgan davomatni reportdan qanday bilaman?
+**Javob:** Excel faylda `Manba` ustunida `Qo'lda kelish`, `Qo'lda ketish` yoki `Qo'lda kelish/ketish` deb ko'rsatiladi. `Xulosa` varag'ida esa qo'lda yozuvlar soni va alohida qisqa ro'yxat chiqadi.
+
+**Savol:** Nega ba'zi scanlar darhol yangi kelish/ketish qilib qo'shilmaydi?
+**Javob:** Tizim juda qisqa vaqt ichidagi takroriy RFID scanlarni e'tiborsiz qoldiradi. Bu tasodifiy ikki marta bosish sababli noto'g'ri attendance yozuvi hosil bo'lishining oldini oladi.
+
 **Savol:** 15 kunlik hisobot nima uchun ba'zan boshqa sanalarni ko'rsatadi?
 **Javob:** Joriy oy 1–15-kuni ichida bo'lsangiz 1–15, 16-kunidan keyin bo'lsangiz 16–oy oxiri ko'rsatiladi. Bu avtomatik aniqlanadi.
 
 **Savol:** Kompaniya hisoboti bilan xodim hisoboti farqi nima?
-**Javob:** `📊 O'tgan oy` va `📆 Bugunga` — kompaniyadagi **barcha** xodimlarni o'z ichiga oladi. `📅 15 kunlik`, `📋 Xodim oylik`, `🗓 Ixtiyoriy sana` — faqat siz ko'rsatgan RFID kodi bo'yicha **bitta xodim** uchun hisobot beradi.
+**Javob:** `📊 O'tgan oy`, `📅 15 kunlik` va `/company_report_till_today` — kompaniyadagi **barcha** xodimlarni o'z ichiga oladi. `📆 Bugunga`, `📋 Xodim oylik`, `🗓 Ixtiyoriy sana` va `/report_till_today` — faqat siz ko'rsatgan RFID kodi bo'yicha **bitta xodim** uchun hisobot beradi.
 
 **Savol:** Tungi smena boshqa oyga o'tib ketsa, qaysi oyda hisoblanadi?
 **Javob:** Kelish vaqti (CheckIn) qaysi oyda bo'lsa, shu oyning hisobotida ko'rinadi. Masalan, mart kechqurun kirgan xodim mart hisobotida bo'ladi, hatto aprel tongida ketsa ham. Ishlagan soatlar to'liq hisobga olinadi.

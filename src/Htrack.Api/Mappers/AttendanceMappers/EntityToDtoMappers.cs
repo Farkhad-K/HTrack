@@ -12,6 +12,8 @@ public static class EntityToDtoMappers
         CkeckIn = entity.CheckIn,
         CheckOut = entity.CheckOut,
         Duration = entity.Duration,
+        CheckInSource = entity.CheckInSource.ToString(),
+        CheckOutSource = entity.CheckOutSource?.ToString(),
         EmployeeId = entity.EmployeeId,
         EmployeeName = entity?.Employee?.Name,
         RFIDCardUID = entity?.Employee?.RFIDCardUID
