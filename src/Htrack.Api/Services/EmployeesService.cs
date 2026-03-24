@@ -58,4 +58,32 @@ public class EmployeesService(
             throw new Exception();
         }
     }
+
+    public ValueTask<Employee> UpdateEmployeeRfidAsync(Guid companyId, string currentRfidCardUID, string newRfidCardUID, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return employeesRepository.UpdateRfidAsync(companyId, currentRfidCardUID, newRfidCardUID, cancellationToken);
+        }
+        catch (CompanyNotFoundException e)
+        {
+            logger.LogError(e, "Company with id {Id} not found", companyId);
+            throw;
+        }
+        catch (EmployeeWithUIDNotFoundException e)
+        {
+            logger.LogError(e, "Failed to update employee RFID with uid {rfidCardUID}", currentRfidCardUID);
+            throw;
+        }
+        catch (EmployeeWithUIDAlreadyExistsException e)
+        {
+            logger.LogWarning(e, "Attempted to assign duplicate RFID {rfidCardUID}", newRfidCardUID);
+            throw;
+        }
+        catch (InvalidEmployeeRfidException e)
+        {
+            logger.LogWarning(e, "Attempted to assign an empty RFID to company {Id}", companyId);
+            throw;
+        }
+    }
 }

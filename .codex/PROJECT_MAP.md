@@ -32,6 +32,9 @@
   - Multi-step employee report flows are in `src/Htrack.Api/TelegramBotServices/Handlers/BotUpdateHandler.EmployeeReports.cs`.
 - Admin UI:
   - Report downloads are handled by `src/Htrack.Api/Pages/Admin/Reports/Index.cshtml.cs`.
+  - Employee management screens live in `src/Htrack.Api/Pages/Admin/Employees/`, with edit flow now covering both name updates and RFID reassignment.
+- Employees API:
+  - `src/Htrack.Api/Controllers/EmployeesController.cs` exposes employee CRUD plus dedicated RFID reassignment endpoint for admin-driven card swaps.
 - Reliability/testing:
   - Business calendar rules live in `src/Htrack.Api/Utilities/AttendanceBusinessRules.cs`.
   - Attendance source persistence is defined on `src/Htrack.Api/Entities/Attendance.cs` and migrated in `src/Htrack.Api/Data/Migrations/`.

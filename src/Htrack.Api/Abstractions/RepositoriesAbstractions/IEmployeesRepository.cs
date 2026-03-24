@@ -8,6 +8,7 @@ public interface IEmployeesRepository
     ValueTask<Employee> GetByIdByAsync(Guid id, CancellationToken cancellationToken = default);
     ValueTask<Employee> GetByRfidAsync(Guid companyId, string rfidCardUID, CancellationToken cancellationToken = default);
     ValueTask<Employee> UpdateAsync(Guid companyId, string rfidCardUID, Employee update, CancellationToken cancellationToken = default);
+    ValueTask<Employee> UpdateRfidAsync(Guid companyId, string currentRfidCardUID, string newRfidCardUID, CancellationToken cancellationToken = default);
     ValueTask<IEnumerable<Employee>> GetAllAsync(Guid companyId, CancellationToken cancellationToken = default);
     ValueTask<bool> DeleteAsync(Guid id, CancellationToken cancellationToken = default);
     ValueTask<(int Created, List<string> Errors)> BulkAddAsync(IEnumerable<Employee> employees, CancellationToken cancellationToken = default);

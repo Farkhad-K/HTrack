@@ -6,12 +6,17 @@
 
 <h4 class="mb-3">Xodimni tahrirlash</h4>
 
+@if (Model.Success != null)
+{
+    <div class="alert alert-success">@Model.Success</div>
+}
+
 @if (Model.Error != null)
 {
     <div class="alert alert-danger">@Model.Error</div>
 }
 
-<form method="post" style="max-width:500px">
+<form method="post" style="max-width:500px" class="mb-4">
     <input type="hidden" name="companyId" value="@Model.CompanyId" />
     <input type="hidden" name="rfid" value="@Model.Rfid" />
     <div class="mb-3">
@@ -22,6 +27,23 @@
         <label for="name" class="form-label">Ismi</label>
         <input type="text" id="name" name="name" class="form-control" value="@Model.Name" required />
     </div>
-    <a asp-page="Index" asp-route-companyId="@Model.CompanyId" class="btn btn-secondary">Bekor qilish</a>
-    <button type="submit" class="btn btn-primary">Saqlash</button>
+    <button type="submit" class="btn btn-primary">Ismni saqlash</button>
+</form>
+
+<form method="post" asp-page-handler="UpdateRfid" style="max-width:500px">
+    <input type="hidden" name="companyId" value="@Model.CompanyId" />
+    <input type="hidden" name="currentRfid" value="@Model.Rfid" />
+    <input type="hidden" name="name" value="@Model.Name" />
+    <div class="mb-3">
+        <label for="employeeNameDisplay" class="form-label">Xodim</label>
+        <input type="text" id="employeeNameDisplay" class="form-control" value="@Model.Name" disabled />
+    </div>
+    <div class="mb-3">
+        <label for="newRfid" class="form-label">Yangi RFID Card UID</label>
+        <input type="text" id="newRfid" name="newRfid" class="form-control" value="@Model.Rfid" required placeholder="AABBCCDD" />
+    </div>
+    <div class="d-flex gap-2">
+        <a asp-page="Index" asp-route-companyId="@Model.CompanyId" class="btn btn-secondary">Bekor qilish</a>
+        <button type="submit" class="btn btn-outline-primary">RFIDni yangilash</button>
+    </div>
 </form>

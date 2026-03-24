@@ -2,6 +2,7 @@ using ClosedXML.Excel;
 using HTrack.Api.Abstractions.ServicesAbstractions;
 using HTrack.Api.Dtos.EmployeeDtos;
 using HTrack.Api.Entities;
+using HTrack.Api.Exceptions;
 using HTrack.Api.Mappers.EmployeeMappers;
 using Microsoft.AspNetCore.Mvc;
 
@@ -52,6 +53,32 @@ public class EmployeesController(
     {
         var employee = await employeesService.UpdateEmployeeAsync(companyId, rfidUid, dto.ToEntity(), abortionToken);
         return Ok(employee.ToDto());
+    }
+
+    [HttpPut("update-employee-rfid/{companyId:guid}/{rfidUid}")]
+    public async ValueTask<IActionResult> UpdateEmployeeRfid([FromRoute] Guid companyId, [FromRoute] string rfidUid, [FromBody] UpdateEmployeeRfid dto, CancellationToken abortionToken = default)
+    {
+        try
+        {
+            var employee = await employeesService.UpdateEmployeeRfidAsync(companyId, rfidUid, dto.RFIDCardUID ?? string.Empty, abortionToken);
+            return Ok(employee.ToDto());
+        }
+        catch (InvalidEmployeeRfidException e)
+        {
+            return BadRequest(new { message = e.Message });
+        }
+        catch (EmployeeWithUIDAlreadyExistsException e)
+        {
+            return Conflict(new { message = e.Message });
+        }
+        catch (CompanyNotFoundException e)
+        {
+            return NotFound(new { message = e.Message });
+        }
+        catch (EmployeeWithUIDNotFoundException e)
+        {
+            return NotFound(new { message = e.Message });
+        }
     }
 
     [HttpPost("bulk-import")]

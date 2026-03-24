@@ -3,6 +3,7 @@ using HTrack.Api.Data;
 using HTrack.Api.Entities;
 using HTrack.Api.Exceptions;
 using HTrack.Api.Repositories;
+using HTrack.Api.Utilities;
 using Microsoft.EntityFrameworkCore;
 
 namespace HTrack.Api.Repositories;
@@ -80,6 +81,36 @@ public class EmployeesRepository(
             ?? throw new EmployeeWithUIDNotFoundException(rfidCardUID);
 
         existingEmployee.Name = update.Name;
+
+        context.Employees.Update(existingEmployee);
+        await context.SaveChangesAsync(cancellationToken);
+
+        return existingEmployee;
+    }
+
+    public async ValueTask<Employee> UpdateRfidAsync(Guid companyId, string currentRfidCardUID, string newRfidCardUID, CancellationToken cancellationToken = default)
+    {
+        var companyExists = await context.Companies.AnyAsync(c => c.Id == companyId, cancellationToken);
+        if (!companyExists)
+            throw new CompanyNotFoundException(companyId);
+
+        var normalizedCurrentRfid = RfidUtility.Normalize(currentRfidCardUID);
+        var normalizedNewRfid = RfidUtility.Normalize(newRfidCardUID);
+
+        var existingEmployee = await context.Employees
+            .FirstOrDefaultAsync(e => e.CompanyId == companyId && e.RFIDCardUID == normalizedCurrentRfid, cancellationToken)
+            ?? throw new EmployeeWithUIDNotFoundException(normalizedCurrentRfid);
+
+        if (existingEmployee.RFIDCardUID == normalizedNewRfid)
+            return existingEmployee;
+
+        var duplicateRfidExists = await context.Employees
+            .AnyAsync(e => e.Id != existingEmployee.Id && e.RFIDCardUID == normalizedNewRfid, cancellationToken);
+
+        if (duplicateRfidExists)
+            throw new EmployeeWithUIDAlreadyExistsException(normalizedNewRfid);
+
+        existingEmployee.RFIDCardUID = normalizedNewRfid;
 
         context.Employees.Update(existingEmployee);
         await context.SaveChangesAsync(cancellationToken);

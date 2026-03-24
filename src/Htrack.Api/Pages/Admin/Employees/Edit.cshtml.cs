@@ -11,6 +11,7 @@ public class EditModel(IEmployeesService employeesService) : PageModel
     public string? Rfid { get; private set; }
     public string? Name { get; private set; }
     public string? Error { get; private set; }
+    public string? Success { get; private set; }
 
     public async Task<IActionResult> OnGetAsync(Guid companyId, string rfid)
     {
@@ -18,8 +19,9 @@ public class EditModel(IEmployeesService employeesService) : PageModel
         {
             var employee = await employeesService.GetEmployeeByRfidAsync(companyId, rfid);
             CompanyId = companyId;
-            Rfid = rfid;
+            Rfid = employee.RFIDCardUID;
             Name = employee.Name;
+            Success = TempData["Success"] as string;
             return Page();
         }
         catch
@@ -41,6 +43,24 @@ public class EditModel(IEmployeesService employeesService) : PageModel
         {
             CompanyId = companyId;
             Rfid = rfid;
+            Name = name;
+            Error = ex.Message;
+            return Page();
+        }
+    }
+
+    public async Task<IActionResult> OnPostUpdateRfidAsync(Guid companyId, string currentRfid, string newRfid, string name)
+    {
+        try
+        {
+            var employee = await employeesService.UpdateEmployeeRfidAsync(companyId, currentRfid, newRfid);
+            TempData["Success"] = $"RFID yangilandi: {employee.RFIDCardUID}";
+            return RedirectToPage(new { companyId, rfid = employee.RFIDCardUID });
+        }
+        catch (Exception ex)
+        {
+            CompanyId = companyId;
+            Rfid = currentRfid;
             Name = name;
             Error = ex.Message;
             return Page();
