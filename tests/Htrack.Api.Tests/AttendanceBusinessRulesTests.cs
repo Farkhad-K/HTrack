@@ -5,10 +5,14 @@ namespace Htrack.Api.Tests;
 public class AttendanceBusinessRulesTests
 {
     [Theory]
-    [InlineData("2026-03-14", "2026-03-01", "2026-03-15")]
-    [InlineData("2026-03-16", "2026-03-16", "2026-03-31")]
-    [InlineData("2026-02-28", "2026-02-16", "2026-02-28")]
-    [InlineData("2024-02-29", "2024-02-16", "2024-02-29")]
+    [InlineData("2026-03-14", "2026-03-01", "2026-03-15")] // Ordinary 1st half
+    [InlineData("2026-03-15", "2026-03-01", "2026-03-15")] // Ordinary 1st half
+    [InlineData("2026-03-16", "2026-03-01", "2026-03-15")] // Special case: 16th returns closed 1-15
+    [InlineData("2026-03-17", "2026-03-16", "2026-03-31")] // Ordinary 2nd half
+    [InlineData("2026-03-31", "2026-03-16", "2026-03-31")] // Ordinary 2nd half
+    [InlineData("2026-04-01", "2026-03-16", "2026-03-31")] // Special case: 1st returns closed 16-end of prev month
+    [InlineData("2026-02-28", "2026-02-16", "2026-02-28")] // Feb non-leap
+    [InlineData("2024-02-29", "2024-02-16", "2024-02-29")] // Feb leap year
     public void GetCurrentHalfMonthRange_ReturnsExpectedBounds(string todayRaw, string expectedStartRaw, string expectedEndRaw)
     {
         var today = DateOnly.Parse(todayRaw);
