@@ -49,9 +49,11 @@ public partial class ExcelReportService(IHTrackDbContext context) : IExcelReport
         var periodName = from.Day == 1 ? "1-15" : "16-oy oxiri";
         var rows = await QueryAttendances(companyId, from, to, ct);
 
-        var monthName = today.ToDateTime(TimeOnly.MinValue).ToString("MMMM", _uzCulture);
-        var label = $"{monthName} {today.Year} ({periodName})";
-        var fileName = $"{company.Name!}_{monthName}_{today.Year}_davomat_{from.Day}dan{to.Day}.xlsx";
+        // Get month and year from the actual report period (from) instead of current date (today)
+        var reportMonthDate = from.ToDateTime(TimeOnly.MinValue);
+        var monthName = reportMonthDate.ToString("MMMM", _uzCulture);
+        var label = $"{monthName} {reportMonthDate.Year} ({periodName})";
+        var fileName = $"{company.Name!}_{monthName}_{reportMonthDate.Year}_davomat_{from.Day}dan{to.Day}.xlsx";
 
         return BuildReport(rows, company.Name!, label, fileName);
     }

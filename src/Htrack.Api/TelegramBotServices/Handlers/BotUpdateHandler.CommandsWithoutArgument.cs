@@ -96,12 +96,22 @@ public partial class BotUpdateHandler
         if (!await EnsureCompanyAccess(botClient, message, userCompany, ct))
             return;
 
+        var today = TimeHelper.GetUzbekistanToday();
+        var statusMsg = (today.Day == 16 || today.Day == 1)
+            ? "🔒 Yopilgan davr uchun yakuniy hisobot tayyorlanmoqda..."
+            : "📅 15 kunlik batafsil davomat hisoboti tayyorlanmoqda...";
+
+        await botClient.SendMessage(
+            chatId: message.Chat.Id,
+            text: statusMsg,
+            cancellationToken: ct);
+
         var (stream, fileName) = await reportService.Get15DayReportAsync(userCompany!.Id, ct);
 
         await botClient.SendDocument(
             chatId: message.Chat.Id,
             document: new InputFileStream(stream, fileName),
-            caption: $"📅 {userCompany.Name} kompaniyasining joriy 15 kunlik batafsil davomat hisoboti",
+            caption: $"📅 {userCompany.Name} kompaniyasining 15 kunlik batafsil davomat hisoboti",
             cancellationToken: ct);
     }
 
